@@ -110,7 +110,7 @@ ubuntu-latest and windows-latest.
 
 | ID | Evidence | Synthetic / CI | Real (local) |
 |---|---|---|---|
-| AT-01 | `uv sync --locked`, Python 3.12.16 | Windows ✔ locally; CI matrix configured | ✔ |
+| AT-01 | `uv sync --locked`, Python 3.12 | ✔ CI ubuntu-latest + windows-latest | ✔ |
 | AT-02 | ruff check, ruff format --check, mypy --strict (25 files) | ✔ | — |
 | AT-03 | `test_fetch_and_network.py`, `local::test_at03…` | ✔ | ✔ (116 files) |
 | AT-04 | Socket guard in `conftest.py`, `test_network_is_blocked` | ✔ | ✔ |
@@ -118,7 +118,7 @@ ubuntu-latest and windows-latest.
 | AT-06 | `test_every_input_row_is_accounted_for` (independent CSV count), `local::test_at06…` | ✔ | ✔ |
 | AT-07 | `test_match_keys_unique_and_collisions_resolved` | ✔ | ✔ (schema uniqueness) |
 | AT-08 | `test_winner_swap_invariance` (300 examples × 4–8 rows) | ✔ | — |
-| AT-09 | `test_golden_vectors_reproduce` (64 vectors) | ✔ Windows; Linux in CI | — |
+| AT-09 | `test_golden_vectors_reproduce` (64 vectors) | ✔ CI Linux + Windows | — |
 | AT-10 | `test_row_order_does_not_change_content` | ✔ | — |
 | AT-11 | `test_no_winner_first_columns_downstream` | ✔ | ✔ (same schemas) |
 | AT-12 | Mutation test (55% leak on 10k is detected), `local::test_at12…` | ✔ | ✔ |
@@ -140,7 +140,10 @@ ubuntu-latest and windows-latest.
 | AT-28 | `test_splits_are_chronological_and_inside_development` | ✔ | — |
 | AT-29 | `test_canonical_player_id_*`, `test_padded_and_zero_prefixed_ids_canonicalise` | ✔ | — |
 
-Totals at the time of writing: 155 tests, all passing locally on Windows (148 synthetic + 7 local real-data).
+Totals: 155 tests pass locally on Windows (148 synthetic + 7 real-data). GitHub Actions run
+[41347138038](https://github.com/AbdellatifZaghloul/QuantEdge-AI/actions/runs/41347138038) for commit
+`d4114a3`: ubuntu-latest and windows-latest each **148 passed, 1 skipped**. The skip is the real-data module,
+which skips itself without `data/`. Ruff, format, strict mypy and the hygiene guard also pass on both.
 
 ## 4. Deviations and issues found during implementation
 
