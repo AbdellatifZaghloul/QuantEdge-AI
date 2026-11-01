@@ -1,0 +1,12 @@
+# Evidence partitions and chronological development folds (VALIDATION.md §1-2, D-05).
+burn_in_end: 2004-12-31
+development_start: 2005-01-01
+development_end: 2024-12-31
+holdout_start: 2025-01-01
+
+# Inner walk-forward folds: fit on [development_start, Dec 31 of y-2],
+# calibrate on year y-1, test on year y.
+inner_test_years: [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+# Late check on frozen selections only; at most this many logged looks per major version.
+late_check_years: [2023, 2024]
+late_check_max_looks: 3

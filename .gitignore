@@ -1,4 +1,21 @@
-.env 
-.venv/ 
-__pycache__/ 
-*.pyc 
+# Environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+
+# Research data and run outputs (licensed / derived; never committed)
+data/
+runs/
+*.parquet
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+dist/
+build/
+*.egg-info/

@@ -46,6 +46,7 @@ Last updated: 2026-11-01 (Phase 1 approval).
 | D-04 | Results source after the archive ends (~Roland Garros 2026) | Defer. Options: (a) TML as an optional research adapter; (b) own result capture for odds-covered events, which pairs naturally with forward odds capture; (c) commercial feed. Prefer (b) for prospective paper trading |
 | D-07 | Betfair historic data | Excluded. Requires a Betfair.com account, unavailable in unsupported countries. Revisit only if the owner has lawful access |
 | D-08 | Commercial ambition | Treat QuantEdge as a non-commercial research and portfolio project. Any commercial step requires a licensed results/stats feed, retraining from scratch, Odds API terms review and legal advice. No commercial claims in the public README |
+| D-22 | Licence for QuantEdge's own source code | Choose before inviting reuse (e.g. MIT or Apache-2.0 for code only; the research data stays CC BY-NC-SA). Until then the public code is all-rights-reserved by default |
 | D-15 | Public-repo content | Public code, docs, synthetic fixtures and committed `reference/` tables. No data, no row-level outputs, no tennis-data-derived figures. Attribution block in README |
 
 ---

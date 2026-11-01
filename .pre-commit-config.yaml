@@ -1,0 +1,25 @@
+# All hooks are local (run through uv); no third-party hook repositories are fetched.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --locked ruff check
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run --locked ruff format --check
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy (strict, src)
+        entry: uv run --locked mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: repo-hygiene
+        name: data / secret / large-file guard
+        entry: uv run --locked python -m quantedge.devtools.hygiene
+        language: system
+        pass_filenames: true

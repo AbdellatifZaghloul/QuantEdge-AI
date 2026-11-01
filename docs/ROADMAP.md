@@ -50,8 +50,8 @@ Decisions D-05, D-10, D-11, D-12, D-13, D-14 and D-17 accepted. uv installed.
 pyproject.toml  uv.lock  .python-version(3.12)  .env.example  .gitignore(update)  .pre-commit-config.yaml
 .github/workflows/ci.yml               # ubuntu-latest + windows-latest
 configs/sources.yaml  configs/splits.yaml  configs/chronology.yaml
-reference/round_ordinal.csv  reference/round_day_bounds.csv  reference/tournament_classes.csv
-reference/score_tokens.csv  reference/level_codes.csv          # each with a `rationale`/`source` column
+src/quantedge/reference/{round_ordinal,round_day_bounds,tournament_classes,score_tokens,level_codes}.csv
+                                       # package data; each with a rationale/description column
 src/quantedge/core/{ids.py, hashing.py, chronology.py, asof.py, dataview.py, manifest.py, lineage.py}
 src/quantedge/adapters/base.py
 src/quantedge/adapters/research/sackmann_archive.py

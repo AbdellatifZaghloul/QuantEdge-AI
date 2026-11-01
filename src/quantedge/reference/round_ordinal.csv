@@ -1,0 +1,15 @@
+round,ordinal,stage,precedence_eligible,description
+Q1,10,qualifying,true,Qualifying round 1
+Q2,20,qualifying,true,Qualifying round 2
+Q3,30,qualifying,true,Qualifying round 3
+Q4,40,qualifying,true,Qualifying round 4
+R128,50,main,true,Round of 128
+R64,60,main,true,Round of 64
+R32,70,main,true,Round of 32
+ER,75,main,false,"Undocumented code (32 rows, e.g. Adelaide 2007); semantics unknown so excluded from earlier-round precedence"
+R16,80,main,true,Round of 16
+RR,85,main,true,Round robin; equal ordinals give no mutual precedence
+QF,90,main,true,Quarterfinal
+SF,100,main,true,Semifinal
+BR,105,main,true,Bronze-medal match (played after the semifinals)
+F,110,main,true,Final

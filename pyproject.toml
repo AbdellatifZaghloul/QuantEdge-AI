@@ -1,0 +1,75 @@
+[project]
+name = "quantedge"
+version = "0.1.0"
+description = "QuantEdge AI: research-grade ATP tennis probability, pricing and validation platform (research use only)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "Abdellatif Zaghloul" }]
+dependencies = [
+    "polars>=2.1",
+    "pandera[polars]>=0.35",
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+    "typer>=0.15",
+    "scipy>=1.14",
+    "tzdata>=2024.1",  # IANA database for polars UTC datetimes on Windows
+]
+
+[project.scripts]
+quantedge = "quantedge.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "hypothesis>=6.120",
+    "ruff>=0.9",
+    "mypy>=1.14",
+    "pre-commit>=4.0",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PL", "N", "S", "DTZ", "PTH"]
+ignore = [
+    "PLR0913",  # many-argument functions are acceptable for explicit data builders
+    "PLR0917",  # keyword-heavy test helpers and builders take positional args by design
+    "PLR0911",  # the score parser returns early per documented case
+    "PLR0912",  # explicit branching in domain parsers is clearer than indirection
+    "PLR2004",  # magic values are acceptable in domain rules and tests
+    "S101",     # assert used in tests and invariants
+    "S603",     # subprocess without shell is intentional (git metadata)
+    "S607",     # git resolved from PATH
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0915", "S311", "N802"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["quantedge"]
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["scipy", "scipy.*", "pandera", "pandera.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "local: requires the real pinned research snapshot under data/ (skipped in CI)",
+]

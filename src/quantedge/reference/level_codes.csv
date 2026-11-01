@@ -1,0 +1,9 @@
+level,tier,description,source
+G,tour,Grand Slam,Sackmann matches_data_dictionary.txt
+M,tour,Masters 1000,Sackmann matches_data_dictionary.txt
+A,tour,Other tour-level events,Sackmann matches_data_dictionary.txt
+F,tour,Tour finals and other season-ending events,Sackmann matches_data_dictionary.txt
+D,tour,Davis Cup,Sackmann matches_data_dictionary.txt
+O,tour,Olympics (observed in data; not listed in the dictionary),Observed in pinned snapshot (e.g. 2024-0096 Paris Olympics)
+C,challenger,Challenger,Sackmann matches_data_dictionary.txt
+S,itf,Satellite / ITF,Sackmann matches_data_dictionary.txt

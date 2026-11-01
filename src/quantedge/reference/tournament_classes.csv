@@ -1,0 +1,11 @@
+level,min_draw_size,event_class,nominal_days,end_offset_days,rationale
+G,0,slam,15,16,"Two-week event; main draw may start the Sunday before tourney_date; +16 allows a weather-delayed final"
+M,96,two_week,12,15,"96/128-draw Masters span about 12 days; wide upper bound for weather"
+M,0,one_week,7,10,"One-week event; +10 allows Sunday finals pushed to Monday or later"
+A,96,two_week,12,15,"Large-draw tour events (mostly early eras) can span two weeks"
+A,1,one_week,7,10,"One-week tour event (also covers team events such as United Cup)"
+F,0,finals,8,10,"Season finals: round robin then knockout over about 8 days"
+O,0,olympics,9,12,"Olympic tennis spans about 9 days, starting before tourney_date"
+D,0,davis_cup,3,10,"Davis Cup ties span 3 days; Finals weeks are longer"
+C,1,one_week,7,10,"Challenger events are one week"
+*,0,other,15,16,"Unknown level or missing draw size: widest bounds"

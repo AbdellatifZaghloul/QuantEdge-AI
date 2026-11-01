@@ -1,0 +1,17 @@
+token,outcome_type,description
+RET,retired,Retirement
+Ret'd,retired,Retirement (variant)
+W/O,walkover,Walkover
+Walkover,walkover,Walkover (variant)
+DEF,default,Default
+Def.,default,Default (variant)
+Default,default,Default (variant)
+ABD,abandoned,Abandoned
+ABN,abandoned,Abandoned (variant)
+abandoned,abandoned,Abandoned (variant)
+unfinished,abandoned,Unfinished
+Played and unfinished,abandoned,Davis Cup dead rubber not completed
+Played and abandoned,abandoned,Davis Cup dead rubber abandoned
+UNK,unknown,Score unknown in source
+NA,unknown,Score not available in source
+UNP,unknown,Undocumented code; treated as unknown

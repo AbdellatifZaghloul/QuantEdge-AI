@@ -1,0 +1,7 @@
+# Conservative day-instant conversion (ARCHITECTURE.md §5.3, D-13).
+# Without a known timezone, the earliest instant of a calendar day anywhere on Earth is
+# 00:00 at UTC+14 and the latest is 24:00 at UTC-12.
+earliest_utc_offset_hours: 14
+latest_utc_offset_hours: -12
+# Rankings are treated as knowable at the end of their ranking date (latest instant).
+ranking_knowability: latest_instant_of_ranking_date

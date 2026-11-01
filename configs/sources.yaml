@@ -1,0 +1,18 @@
+# Pinned research sources (DATA_SOURCES.md §3.1, D-11, D-17).
+sackmann_archive:
+  source: sackmann_archive
+  repo: Aneeshers/tennis-sackmann-archive
+  commit: 83733587353df8a41f2fd4f516147d5aa83f5a8d
+  licence: CC BY-NC-SA 4.0
+  licence_class: RESEARCH_NC
+  attribution: >-
+    Match results and statistics: Jeff Sackmann / Tennis Abstract, licensed CC BY-NC-SA 4.0,
+    obtained via the tennis-sackmann-archive mirror (github.com/Aneeshers/tennis-sackmann-archive);
+    modified (canonicalised) by QuantEdge AI.
+  include_patterns:
+    - '^atp/atp_matches_[0-9]{4}\.csv$'
+    - '^atp/atp_matches_qual_chall_[0-9]{4}\.csv$'
+    - '^atp/atp_players\.csv$'
+    - '^atp/atp_rankings_[0-9a-z]+\.csv$'
+  raw_url_template: 'https://raw.githubusercontent.com/{repo}/{commit}/{path}'
+  tree_url_template: 'https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1'

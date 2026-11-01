@@ -53,7 +53,7 @@ Not used: Airflow/Prefect, Kafka, Postgres, Kubernetes, feature-store products, 
 QuantEdge-AI/
 ├── pyproject.toml  uv.lock  .python-version  .env.example
 ├── configs/                      # sources, splits, chronology, elo, backtest, portfolio (YAML)
-├── reference/                    # COMMITTED, hand-curated, cites sources; no licensed rows
+├── src/quantedge/reference/      # COMMITTED, hand-curated, cites sources; no licensed rows (package data)
 │   ├── round_ordinal.csv
 │   ├── round_day_bounds.csv      # day-offset bounds per (event class, round), §5.4
 │   ├── tournament_classes.csv    # level/draw → duration class
@@ -111,7 +111,7 @@ chronology or knowability, and permuting it (outside collision groups) changes n
 ### 4.2 Deterministic, winner-independent orientation
 
 ```
-bit       = first byte of sha256("qe.orient.v1" ‖ match_key) & 1
+bit       = first byte of sha256(LP("qe.orient.v1") ‖ LP(match_key)) & 1
 player_a  = min(p1, p2) if bit == 0 else max(p1, p2)
 ```
 - The inputs are the unordered pair and the event context only. **No outcome field enters the function**, so
@@ -203,7 +203,7 @@ rankings table.
 ending before round k's begin) are quarantined.
 
 ### 5.4 Round day bounds
-`reference/round_day_bounds.csv` holds offsets `(lo, hi)` in days from `tournament_start_date` per
+`src/quantedge/reference/round_day_bounds.csv` holds offsets `(lo, hi)` in days from `tournament_start_date` per
 `(event_class, round)`. Bounds are deliberately wide: qualifying starts before the nominal date, Sunday starts
 exist, rain delays happen. Each row cites its rationale. Bounds are **validated** against `scheduled_start_utc`
 wherever The Odds API covers a match. Any match falling outside its bounds is a QA failure that widens the bounds.
@@ -290,7 +290,7 @@ only for **betting** conclusions, never for keeping a component.
 | **M0 Market** | De-vigged probabilities: multiplicative, additive, power, Shin (2-way analytic) | Benchmark wherever contemporaneous odds exist. The method is chosen on development data only |
 | **M1 Elo** | Overall + surface ratings, blend | Under §5.6 semantics. K = c/(n+o)^s (published FiveThirtyEight/Kovalchik form), tuned in-fold. Walkover: no update. Retirement policy: D-09. Inactivity decay and margin weighting are candidates evaluated in-fold |
 | **M2 Serve/return** | Opponent-adjusted serve/return point rates, time-decayed, empirical-Bayes shrinkage, posterior uncertainty | Task: predict next-match serve-point win rate |
-| **M3 Markov + MC** | Exact point→game→tiebreak→set→match DP. MC for joint market outcomes with parameter draws from the M2 posterior | Serve order carried across sets by game-count parity. Final-set rules per `scoring_rules.csv`. Analytic and MC agree within MC error. Optional anchoring to a headline probability, with **the same anchored parameters used for every market priced** |
+| **M3 Markov + MC** | Exact point→game→tiebreak→set→match DP. MC for joint market outcomes with parameter draws from the M2 posterior | Serve order carried across sets by game-count parity. Final-set rules per `scoring_rules.csv` (P4). Analytic and MC agree within MC error. Optional anchoring to a headline probability, with **the same anchored parameters used for every market priced** |
 | **M4 Calibrated ML** | Logistic (primary), LightGBM (challenger). Independent and market-anchored tracks | In-fold calibration (Platt or isotonic). Bootstrap/ensemble intervals |
 | **Pricing** | Match winner, first set, total games, game handicap from one joint distribution | Lines outside the modelled support return "no price", never an extrapolation |
 | **Final** | `p = w·p_model + (1−w)·p_market` in logit space, `w` fit in-fold | `w ≈ 0` means no evidence of an edge |
