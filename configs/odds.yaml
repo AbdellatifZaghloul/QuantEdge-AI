@@ -1,0 +1,17 @@
+# Odds infrastructure (Phase 3A). No chargeable request is possible with these defaults.
+the_odds_api:
+  base_url: https://api.the-odds-api.com
+  regions: [eu]
+  markets: [h2h]
+  odds_format: decimal
+  date_format: iso
+  timeout_s: 30
+  max_retries: 4
+  backoff_base_s: 2.0
+  backoff_max_s: 60.0
+  # Hard per-run credit ceiling for chargeable calls. 0 = refuse every chargeable request.
+  max_credits_per_run: 0
+
+selector:
+  max_staleness_minutes: 30
+  market: match_winner

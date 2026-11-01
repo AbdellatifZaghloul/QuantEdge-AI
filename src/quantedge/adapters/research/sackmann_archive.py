@@ -6,10 +6,8 @@ verified against the git blob SHA-1 in the tree at that commit, and our own SHA-
 
 from __future__ import annotations
 
-import http.client
 import json
 import re
-import socket
 import time
 import urllib.request
 from collections.abc import Callable
@@ -22,6 +20,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from quantedge.core.hashing import git_blob_sha1, sha256_file
+from quantedge.core.http import ipv4_first_opener
 from quantedge.core.lineage import LicenceClass
 from quantedge.core.manifest import (
     RAW_MANIFEST_NAME,
@@ -35,7 +34,6 @@ HttpGet = Callable[[str], bytes]
 
 _USER_AGENT = "quantedge-research-fetch/0.1"
 _TIMEOUT_S = 120
-_CONNECT_TIMEOUT_S = 10.0
 _RETRIES = 3
 
 
@@ -87,39 +85,8 @@ def snapshot_dir(data_root: Path, config: SourceConfig) -> Path:
     return data_root / "raw" / "research_nc" / config.source / config.commit
 
 
-class _IPv4FirstHTTPSConnection(http.client.HTTPSConnection):  # pragma: no cover - network
-    """HTTPS connection that tries IPv4 addresses before IPv6, each with a short connect timeout.
-
-    Python 3.12's ``socket.create_connection`` tries addresses sequentially with the full timeout,
-    which stalls for minutes on hosts with broken IPv6 routing.
-    """
-
-    def connect(self) -> None:
-        infos = socket.getaddrinfo(self.host, self.port, type=socket.SOCK_STREAM)
-        infos.sort(key=lambda info: info[0] != socket.AF_INET)
-        last_error: OSError | None = None
-        for family, kind, proto, _, address in infos:
-            sock = socket.socket(family, kind, proto)
-            try:
-                sock.settimeout(_CONNECT_TIMEOUT_S)
-                sock.connect(address)
-            except OSError as exc:
-                last_error = exc
-                sock.close()
-                continue
-            sock.settimeout(self.timeout if isinstance(self.timeout, float | int) else None)
-            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)  # type: ignore[attr-defined]
-            return
-        raise last_error or OSError(f"cannot connect to {self.host}")
-
-
-class _IPv4FirstHTTPSHandler(urllib.request.HTTPSHandler):  # pragma: no cover - network
-    def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
-        return self.do_open(_IPv4FirstHTTPSConnection, req)
-
-
 def default_http_get(url: str) -> bytes:  # pragma: no cover - network
-    opener = urllib.request.build_opener(_IPv4FirstHTTPSHandler())
+    opener = ipv4_first_opener()
     last_error: Exception | None = None
     for attempt in range(_RETRIES):
         try:

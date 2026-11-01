@@ -165,6 +165,12 @@ ATP 1000, ATP 500, WTA 1000 and WTA 500."*
 - Cost arithmetic: one region × one market × hourly snapshots over a 14-day Slam = 336 calls × 10 = 3,360 credits.
   Budget per decision D-06.
 
+**Phase 3A re-verification (2026-11-01):** market-level `last_update` is the freshness signal (bookmaker-level
+`last_update` is deprecated); pre-match refresh 60 s; HTTP 429 frequency limits undocumented; `/sports` and
+`/events` endpoints cost nothing; quotes are bookmaker prices as seen by the provider, with no executability claim.
+Offline coverage vs canonical data: 2,494 eligible development main-draw matches (2020–2024). See
+docs/reviews/phase-3a.md §2.
+
 ### 4.3 tennis-data.co.uk
 
 Verbatim from the site:

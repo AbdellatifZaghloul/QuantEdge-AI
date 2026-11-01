@@ -303,6 +303,15 @@ only for **betting** conclusions, never for keeping a component.
 
 ---
 
+## 6a. Odds layer (Phase 3A, `quantedge.odds`)
+
+`provider` (interface) → adapter (`theoddsapi`: budgeted, approval-gated fetch + pure normaliser)
+→ append-only content-addressed `store` (prospective and historical streams kept apart)
+→ canonical `odds_events` / `odds_quotes` (`tables`) → `identity` (player/tournament/time-consistent
+event linking; uncertain links are never accepted) → `selector` (strict point-in-time, explicit
+statuses) → `devig` / `baseline` (identical-population comparison, holdout refused).
+Details and verified provider facts: docs/reviews/phase-3a.md.
+
 ## 7. Licence lineage
 
 - Each adapter declares a `licence_class` (DATA_SOURCES.md §1). Raw storage is namespaced by class.

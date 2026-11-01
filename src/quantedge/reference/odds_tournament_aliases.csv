@@ -1,0 +1,26 @@
+provider,competition_key,canonical_name_regex,canonical_levels,note
+the_odds_api,tennis_atp_aus_open_singles,(?i)^australian open$,G,"Anchored: excludes 'Doha Aus Open Qualies'"
+the_odds_api,tennis_atp_french_open,(?i)^(roland garros|french open)$,G,
+the_odds_api,tennis_atp_wimbledon,(?i)^wimbledon$,G,
+the_odds_api,tennis_atp_us_open,(?i)^us open$,G,"Source uses both 'US Open' and 'Us Open'"
+the_odds_api,tennis_atp_indian_wells,(?i)^indian wells masters$,M,
+the_odds_api,tennis_atp_miami_open,(?i)^miami masters$,M,
+the_odds_api,tennis_atp_monte_carlo_masters,(?i)^monte carlo masters$,M,
+the_odds_api,tennis_atp_madrid_open,(?i)^madrid masters$,M,
+the_odds_api,tennis_atp_italian_open,(?i)^rome masters$,M,
+the_odds_api,tennis_atp_canadian_open,(?i)^canada masters$,M,
+the_odds_api,tennis_atp_cincinnati_open,(?i)^cincinnati masters$,M,
+the_odds_api,tennis_atp_shanghai_masters,(?i)^shanghai masters$,M,
+the_odds_api,tennis_atp_paris_masters,(?i)^paris masters$,M,
+the_odds_api,tennis_atp_qatar_open,(?i)^doha$,A,
+the_odds_api,tennis_atp_dubai,(?i)^dubai$,A,
+the_odds_api,tennis_atp_china_open,(?i)^beijing$,A,
+the_odds_api,tennis_atp_japan_open,(?i)^tokyo$,A,"Anchored: excludes 'Tokyo Olympics'"
+the_odds_api,tennis_atp_barcelona_open,(?i)^barcelona$,A,
+the_odds_api,tennis_atp_munich,(?i)^munich$,A,
+the_odds_api,tennis_atp_hamburg_open,(?i)^hamburg$,A,
+the_odds_api,tennis_atp_halle_open,(?i)^halle$,A,
+the_odds_api,tennis_atp_queens_club_champ,(?i)^queen's club$,A,
+the_odds_api,tennis_atp_washington_open,(?i)^washington$,A,
+the_odds_api,tennis_atp_swiss_indoors,(?i)^basel$,A,
+the_odds_api,tennis_atp_vienna_open,(?i)^vienna$,A,

@@ -22,6 +22,8 @@ from tests.conftest import REPO_ROOT
         "notebooks/odds.xlsx",
         "atp_matches_2023.csv",
         "docs/export.csv",
+        "odds/the_odds_api/snapshot.json",
+        "captures.jsonl",
     ],
 )
 def test_forbidden_paths_are_flagged(path: str) -> None:

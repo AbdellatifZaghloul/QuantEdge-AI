@@ -648,6 +648,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "shin" },
     { name = "types-pyyaml" },
 ]
 
@@ -671,6 +672,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.9" },
+    { name = "shin", specifier = ">=0.2" },
     { name = "types-pyyaml", specifier = ">=6.0" },
 ]
 
@@ -740,6 +742,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310, upload-time = "2023-10-24T04:13:40.426Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755, upload-time = "2023-10-24T04:13:38.866Z" },
+]
+
+[[package]]
+name = "shin"
+version = "0.2.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/5f/7e5e14a56cc628ab9639ba7a6f63d66bb017259c9d6de08034944ee9a69d/shin-0.2.2.tar.gz", hash = "sha256:689af805af788c82a515b280ff5db59090a178e820c99e27fc2327c9cf71b4ee", size = 12714, upload-time = "2025-10-23T11:26:14.323Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/ff/19fba4d3693d912c0cb067c29d19e3ed34465ac9a81ab008eaf38bcd58a6/shin-0.2.2-cp312-cp312-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:de7fa3b713f3f23b7e866a288ce2e5541cee3e70e66d3fb62617c1eb5b51a867", size = 406928, upload-time = "2025-10-23T11:25:43.506Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/dc/93d4949cfed01517246462852cd9c9127dec50e6844ba602341f8cd0c08b/shin-0.2.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:83879fe1790512d7ad337709763967aa751d27e6f642e5b49d61c41afcfab992", size = 229349, upload-time = "2025-10-23T11:25:45.117Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/41/b575c1a443aa704855907ea2076227c48598743ce6a88f6b4e3b97b5bc5a/shin-0.2.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:aa46bc1804901311dd50c8e29fd2e48a6a3ac696816cc42e43ba88f1ac6d5bc5", size = 237424, upload-time = "2025-10-23T11:25:46.526Z" },
+    { url = "https://files.pythonhosted.org/packages/11/b6/f2d2b75127943a2af6e426b37ae391c02f72e550771578a2607cffcc852f/shin-0.2.2-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:424bde0931230ae781641d9aaf32b75509aa04c748c803aa3ee69c496757074b", size = 410246, upload-time = "2025-10-23T11:25:48.213Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/9c/4022275ed0c122cb4b94384aec7ed7e0c9232c55052020663c765e788f8e/shin-0.2.2-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:b7eaf1453b2d956737f6d13909f5d2594d17bcccb9f7f0762f7ffd3da7f143eb", size = 400128, upload-time = "2025-10-23T11:25:49.657Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/84/d8643a8c5d9ef7ae867cbaf7151390e2974bdd64ba0831996d89cdccbda2/shin-0.2.2-cp312-cp312-win_amd64.whl", hash = "sha256:74ca4613adb5c21357b7b0e972a4bbb286cefb530a7842bf90979f9920e36bf1", size = 102660, upload-time = "2025-10-23T11:25:51.298Z" },
 ]
 
 [[package]]

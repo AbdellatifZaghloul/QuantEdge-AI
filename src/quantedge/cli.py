@@ -21,6 +21,7 @@ from quantedge.core.splits import load_split_config
 from quantedge.curation.audit import run_audit
 from quantedge.experiments.phase2 import load_phase2_config, run_phase2
 from quantedge.experiments.registry import LateCheckLimitError, read_registry
+from quantedge.odds import commands as odds_commands
 from quantedge.quality.report import build_report, write_report
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help="QuantEdge AI research CLI.")
@@ -28,6 +29,7 @@ data_app = typer.Typer(no_args_is_help=True, help="Research data pipeline (Phase
 app.add_typer(data_app, name="data")
 experiment_app = typer.Typer(no_args_is_help=True, help="Phase 2 experiments (development data).")
 app.add_typer(experiment_app, name="experiment")
+app.add_typer(odds_commands.odds_app, name="odds")
 
 ConfigDir = Annotated[Path, typer.Option(help="Directory containing YAML configs.")]
 DataRoot = Annotated[Path, typer.Option(help="Root of the gitignored data directory.")]

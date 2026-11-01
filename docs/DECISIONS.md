@@ -3,7 +3,7 @@
 Status values: **Accepted** (owner directive or approved), **Proposed** (recommended default; becomes Accepted on
 approval), **Open** (needs owner input). "Blocks" names the earliest phase that cannot start without the decision.
 
-Last updated: 2026-11-01 (Phase 2 completion).
+Last updated: 2026-11-01 (Phase 3A completion).
 
 ---
 
@@ -24,6 +24,8 @@ Last updated: 2026-11-01 (Phase 2 completion).
 | D-09 | Gate 0 eligibility policy `eligibility.v1` (owner-specified defaults): walkovers no update; retirements, played defaults and unterminated incomplete scores flagged and excluded from baseline updates (sensitivity variant includes them); unplayed defaults excluded; unresolved contradictions (placeholders, contradictory duplicates, knockout and score contradictions) excluded from training and evaluation with reasons retained; round-label conflicts update only after the tournament end bound. See docs/reviews/phase-2.md §1 | Owner directive, Phase 2 |
 | D-23 | Placeholder identities `sackmann:199999` (U Unknown) and `sackmann:200816` (Bye1) are not players; curated in `reference/placeholder_players.csv` | Phase 2 Gate 0 evidence |
 | D-24 | Phase 2 model version `phase2-elo-v1`: FiveThirtyEight K, nested per-fold selection, slope-only recalibration, conservative ordering. Sensitivity winners (e.g. retirement-included updates) are **not** adopted without a new pre-registered version | Phase 2 protocol |
+| D-25 | Market decision time = provider scheduled start minus a lead (default 60 min); model features keep the earlier day-bound cutoff (market never has less information than the model). Quotes are labelled observed, never executable | Phase 3A design finding (docs/reviews/phase-3a.md §3) |
+| D-26 | All chargeable odds calls are blocked by default (credit ceiling 0); historical calls also need explicit approval; API key only via `QE_ODDS_API_KEY` | Owner directive, Phase 3A |
 | D-17 | Fetch from `Aneeshers/tennis-sackmann-archive` at full commit `83733587353df8a41f2fd4f516147d5aa83f5a8d`. Verify git blob SHA-1s against the tree at that commit and record our own SHA-256 manifest | Owner approval 2026-11-01 |
 
 ---
@@ -33,7 +35,7 @@ Last updated: 2026-11-01 (Phase 2 completion).
 | ID | Question | Recommended default | Blocks |
 |---|---|---|---|
 | D-03b | Use of tennis-data.co.uk | Manual download. Private, untimed **evaluation benchmark only**: not a training feature, not a calibration target. Never committed or published at row level. Tier C results kept **out of the public portfolio** by default | P3 |
-| D-06 | The Odds API purchase | After P2: one month on the 20K plan (verified $30/mo) for a **coverage probe**. Check which books and markets exist for ATP keys, and whether totals/handicaps exist historically. Then decide on a historical pull plus forward capture | P3 |
+| D-06 | The Odds API purchase (**open — see phase-3a.md §7 Q1-Q5**) | After P2: one month on the 20K plan (verified $30/mo) for a **coverage probe**. Check which books and markets exist for ATP keys, and whether totals/handicaps exist historically. Then decide on a historical pull plus forward capture | P3 |
 | D-18 | Round day bounds values | P1 authors conservative bounds with written rationale. P3 validates them against Odds API `commence_time` and widens them where violated | P2 (used by Elo) |
 | D-19 | Scoring-format table | Each final-set rule row cites a primary source (tournament or ATP rulebook). Unsourced rows block P4 pricing for that event | P4 |
 | D-20 | Execution-model defaults | Latency 60 s; slippage grid {0, 1, 2, 3}% of odds; max stake grid. Always reported as unverified sensitivity | P6 |

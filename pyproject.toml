@@ -28,6 +28,7 @@ dev = [
     "mypy>=1.14",
     "pre-commit>=4.0",
     "types-pyyaml>=6.0",
+    "shin>=0.2",
 ]
 
 [build-system]

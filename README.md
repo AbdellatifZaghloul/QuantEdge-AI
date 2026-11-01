@@ -3,8 +3,9 @@
 Research platform for ATP men's singles: calibrated pre-match probabilities, market comparison and
 risk-aware *paper* staking analysis. **Research use only. No automated or real-money betting.**
 
-Status: **Phase 2 — Elo baselines and honest evaluation** (development data only; no odds, no betting
-simulation; the 2025+ holdout is sealed). See [docs/reviews/phase-2.md](docs/reviews/phase-2.md).
+Status: **Phase 3A — odds infrastructure** (adapter, append-only capture, identity linking,
+point-in-time selection, de-vig; no odds acquired, no paid calls, no betting). Phase 2 Elo results:
+[docs/reviews/phase-2.md](docs/reviews/phase-2.md); odds: [docs/reviews/phase-3a.md](docs/reviews/phase-3a.md).
 See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What Phase 1 provides
@@ -31,6 +32,7 @@ uv run quantedge data build      # canonical Parquet tables -> data/processed/<b
 uv run quantedge data qa         # qa_report.json / qa_report.md for the latest build
 uv run quantedge data audit      # Gate 0 eligibility + anomaly audit (build_dir/derived/)
 uv run quantedge experiment run  # Elo vs ranking baseline, nested walk-forward 2013-2022 -> runs/
+uv run quantedge odds coverage   # offline odds coverage and credit estimate (no network)
 uv run pytest -m "not local"     # synthetic-fixture tests (what CI runs)
 uv run pytest                    # also runs real-data tests when data/ is present
 ```
@@ -53,4 +55,4 @@ uv run pytest                    # also runs real-data tests when data/ is prese
 [Architecture](docs/ARCHITECTURE.md) · [Data sources](docs/DATA_SOURCES.md) ·
 [Validation](docs/VALIDATION.md) · [Roadmap](docs/ROADMAP.md) · [Decisions](docs/DECISIONS.md) ·
 [Open-source audit](docs/OPEN_SOURCE_AUDIT.md) · [Phase 1 review](docs/reviews/phase-1.md) ·
-[Phase 2 review](docs/reviews/phase-2.md)
+[Phase 2 review](docs/reviews/phase-2.md) · [Phase 3A review](docs/reviews/phase-3a.md)
