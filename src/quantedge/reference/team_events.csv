@@ -1,0 +1,3 @@
+rule,value,reason
+level,D,"Davis Cup ties: an individual rubber loss does not eliminate a player from later ties"
+name_regex,(?i)^(atp cup|united cup|nations cup|world team cup|laver cup|hopman cup)$,"Team competitions where players continue after individual losses"

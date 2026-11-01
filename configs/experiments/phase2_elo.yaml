@@ -1,0 +1,32 @@
+# Phase 2 experiment: Elo / surface Elo vs point-in-time ranking baseline (development data only).
+name: phase2_elo
+model_version: phase2-elo-v1   # late-check looks are counted per model version
+seed: 20261101
+bootstrap_replicates: 2000
+rank_staleness_days: 365
+rank_cap: 2000
+
+# Candidate configurations for nested per-fold selection (conservative ordering, baseline
+# retirement policy, no decay). Selection never sees the fold's test year.
+elo_grid:
+  - {k_mode: constant, k_constant: 16}
+  - {k_mode: constant, k_constant: 24}
+  - {k_mode: constant, k_constant: 32}
+  - {k_mode: constant, k_constant: 48}
+  - {k_mode: fivethirtyeight, k_c: 150}
+  - {k_mode: fivethirtyeight, k_c: 250}
+  - {k_mode: fivethirtyeight, k_c: 350}
+# Surface partial pooling pseudo-counts m (w = n / (n + m)); "inf" = overall rating only.
+surface_pseudo_counts: [0, 5, 20, 50, inf]
+
+# Descriptive sensitivity studies on the inner folds (never used for selection).
+sensitivity:
+  reference: {k_mode: fivethirtyeight, k_c: 250}
+  # Decay toward 1500: continuous (grace 0) and inactivity-only (grace 60 days).
+  decay:
+    - {decay_half_life_days: 365, decay_grace_days: 0}
+    - {decay_half_life_days: 730, decay_grace_days: 0}
+    - {decay_half_life_days: 365, decay_grace_days: 60}
+    - {decay_half_life_days: 730, decay_grace_days: 60}
+  retirement_policies: [elo_update_retirements]
+  orderings: [naive]

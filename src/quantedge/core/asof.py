@@ -49,6 +49,8 @@ class Result:
     winner_id: str
     knowable_at_utc: datetime
     precedence_ok: bool
+    surface: str | None = None
+    event_time_utc: datetime | None = None  # earliest possible start (for time-based state)
 
     @property
     def players(self) -> tuple[str, str]:
@@ -64,6 +66,7 @@ class Target:
     player_b_id: str
     prediction_cutoff_utc: datetime
     precedence_ok: bool
+    surface: str | None = None
 
     @property
     def players(self) -> tuple[str, str]:
@@ -105,25 +108,36 @@ def admissible_results(matches: pl.DataFrame, target_key: str) -> pl.DataFrame:
     return pl.concat([k_rows, p_rows], how="diagonal")
 
 
-def _results(matches: pl.DataFrame) -> list[Result]:
-    frame = matches.select(
-        "match_key", "tournament_id", "round_ordinal", "player_a_id", "player_b_id",
-        "winner_id", "knowable_at_utc", _precedence_ok().alias("precedence_ok"),
-    )  # fmt: skip
-    return [Result(*row) for row in frame.iter_rows()]
+def _optional(frame: pl.DataFrame, column: str, fallback: pl.Expr) -> pl.Expr:
+    return pl.col(column) if column in frame.columns else fallback
 
 
-def _targets(matches: pl.DataFrame) -> list[Target]:
-    frame = matches.select(
+def _results(frame: pl.DataFrame) -> list[Result]:
+    """Results from a frame; ``precedence_ok`` and ``surface`` columns are used when present."""
+    selected = frame.select(
         "match_key", "tournament_id", "round_ordinal", "player_a_id", "player_b_id",
-        "prediction_cutoff_utc", _precedence_ok().alias("precedence_ok"),
+        "winner_id", "knowable_at_utc",
+        _optional(frame, "precedence_ok", _precedence_ok()).alias("precedence_ok"),
+        _optional(frame, "surface", pl.lit(None, dtype=pl.String)).alias("surface"),
+        _optional(frame, "prediction_cutoff_utc", pl.col("knowable_at_utc")).alias("event_time"),
     )  # fmt: skip
-    return [Target(*row) for row in frame.iter_rows()]
+    return [Result(*row) for row in selected.iter_rows()]
+
+
+def _targets(frame: pl.DataFrame) -> list[Target]:
+    selected = frame.select(
+        "match_key", "tournament_id", "round_ordinal", "player_a_id", "player_b_id",
+        "prediction_cutoff_utc",
+        _optional(frame, "precedence_ok", _precedence_ok()).alias("precedence_ok"),
+        _optional(frame, "surface", pl.lit(None, dtype=pl.String)).alias("surface"),
+    )  # fmt: skip
+    return [Target(*row) for row in selected.iter_rows()]
 
 
 def replay[S](
     matches: pl.DataFrame,
     *,
+    results: pl.DataFrame | None = None,
     init: Callable[[], S],
     apply_batch: Callable[[S, Sequence[Result]], S],
     copy_state: Callable[[S], S],
@@ -137,17 +151,23 @@ def replay[S](
     - Participants' (P) results not yet in global state are applied to a *copy* (the overlay),
       grouped by round ordinal; the overlay never mutates global state.
     - Each target is read before any batch containing it is applied (predict-before-update).
+
+    ``matches`` are the prediction targets; ``results`` (default: the same frame) are the outcomes
+    allowed to update state, e.g. only eligibility-approved results.
     """
-    results = sorted(_results(matches), key=lambda r: (r.knowable_at_utc, r.match_key))
+    ordered = sorted(
+        _results(matches if results is None else results),
+        key=lambda r: (r.knowable_at_utc, r.match_key),
+    )
     batches: list[list[Result]] = []
-    for r in results:
+    for r in ordered:
         if batches and batches[-1][0].knowable_at_utc == r.knowable_at_utc:
             batches[-1].append(r)
         else:
             batches.append([r])
 
     own_path: dict[tuple[str, str], list[Result]] = defaultdict(list)
-    for r in results:
+    for r in ordered:
         if r.precedence_ok:
             for p in r.players:
                 own_path[(r.tournament_id, p)].append(r)
