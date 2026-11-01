@@ -3,7 +3,7 @@
 Status values: **Accepted** (owner directive or approved), **Proposed** (recommended default; becomes Accepted on
 approval), **Open** (needs owner input). "Blocks" names the earliest phase that cannot start without the decision.
 
-Last updated: 2026-11-01 (Phase 3A completion).
+Last updated: 2026-11-01 (Phase 3B completion).
 
 ---
 
@@ -26,6 +26,10 @@ Last updated: 2026-11-01 (Phase 3A completion).
 | D-24 | Phase 2 model version `phase2-elo-v1`: FiveThirtyEight K, nested per-fold selection, slope-only recalibration, conservative ordering. Sensitivity winners (e.g. retirement-included updates) are **not** adopted without a new pre-registered version | Phase 2 protocol |
 | D-25 | Market decision time = provider scheduled start minus a lead (default 60 min); model features keep the earlier day-bound cutoff (market never has less information than the model). Quotes are labelled observed, never executable | Phase 3A design finding (docs/reviews/phase-3a.md §3) |
 | D-26 | All chargeable odds calls are blocked by default (credit ceiling 0); historical calls also need explicit approval; API key only via `QE_ODDS_API_KEY` | Owner directive, Phase 3A |
+| D-27 | Pre-registered protocol `market-benchmark-v1` frozen before any odds were seen (SHA-256 `e3d3f642d3dd85064136c8bf8d9fc984887d1beb84d68ad9960c92ec2467da21`): Slam main draws 2020–2022, frozen Phase 2 run `0a5b056019ec`, decision = earliest scheduled start − 60 min, freshness 30 min (sensitivity 15/60), missing source time rejected, Pinnacle if ≥ 80 % available else outcome-blind highest-availability fallback, consensus median secondary, proportional de-vig primary, paired log-loss/Brier differences with block bootstrap, one confirmatory run | Owner directive, Phase 3B (docs/preregistration/market-benchmark-v1.md) |
+| D-28 | Selector timing hardening: quarantine source timestamps later than observation or decision, late snapshots and in-play quotes; reject missing source timestamps by default; anchor decisions on the earliest announced start | Phase 3B |
+| D-29 | Provider-availability probe defined: 4 historical h2h/eu snapshots (2022 Slams, day 2, 12:00 UTC), 40 credits total, outcomes never joined; **execution requires approvals A1–A4** (docs/reviews/phase-3b.md §6). Default credit ceiling stays 0 | Owner directive, Phase 3B |
+| D-30 | Forward live capture specified (docs/specs/forward-capture.md) but **not active**; requires approval A7 | Owner directive, Phase 3B |
 | D-17 | Fetch from `Aneeshers/tennis-sackmann-archive` at full commit `83733587353df8a41f2fd4f516147d5aa83f5a8d`. Verify git blob SHA-1s against the tree at that commit and record our own SHA-256 manifest | Owner approval 2026-11-01 |
 
 ---

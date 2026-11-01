@@ -127,6 +127,7 @@ def compare_on_identical_population(
             terms[f"log_loss_diff::{c}-{base}"] = (
                 terms[f"log_loss::{c}"] - terms[f"log_loss::{base}"]
             )
+            terms[f"brier_diff::{c}-{base}"] = terms[f"brier::{c}"] - terms[f"brier::{base}"]
         result["bootstrap_95"] = block_bootstrap_means(
             week_blocks(common["tournament_start_date"]), terms, replicates=replicates, seed=seed
         )

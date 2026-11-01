@@ -1,6 +1,6 @@
 # QuantEdge AI — Roadmap
 
-Status: **Phase 2 accepted; Phase 3A (odds infrastructure) complete 2026-11-01 — awaiting decisions in [reviews/phase-3a.md](reviews/phase-3a.md) §7 before any odds acquisition.**
+Status: **Phase 3A accepted; Phase 3B (pilot preparation, timing hardening, pre-registration) complete 2026-11-01 — awaiting owner approvals A1–A8 in [reviews/phase-3b.md](reviews/phase-3b.md) §6 before any chargeable request.**
 Each phase ends with `docs/reviews/phase-N.md` (real counts, deviations, open issues) and owner approval.
 Decision IDs refer to [DECISIONS.md](DECISIONS.md).
 

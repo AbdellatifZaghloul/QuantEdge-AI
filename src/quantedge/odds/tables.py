@@ -23,9 +23,18 @@ def quote_id(*fields: str) -> str:
 
 
 def _flags(
-    odds: float, last_update: datetime | None, observed: datetime, commence: datetime, market: str
+    odds: float,
+    last_update: datetime | None,
+    observed: datetime,
+    commence: datetime,
+    market: str,
+    requested: datetime | None = None,
 ) -> str:
     flags = []
+    if requested is not None and observed > requested:
+        flags.append("snapshot_after_request")
+    if last_update is None:
+        flags.append("source_time_missing")
     if odds <= 1.01 or odds >= 101:
         flags.append("odds_out_of_range")
     if last_update is not None and last_update > observed:
@@ -49,6 +58,11 @@ def build_odds_tables(
         if not record.endpoint.endswith("/odds"):
             continue
         snapshot = provider.normalize(capture)
+        requested = (
+            datetime.fromisoformat(record.snapshot_requested_utc.replace("Z", "+00:00"))
+            if record.snapshot_requested_utc
+            else None
+        )
         for event in snapshot.events:
             eid = event_id(provider.name, event.provider_event_id)
             commence_versions[eid].add(event.commence_time_utc)
@@ -110,6 +124,7 @@ def build_odds_tables(
                     snapshot.observed_at_utc,
                     q.commence_time_utc,
                     q.market,
+                    requested,
                 ),
                 "price_semantics": PRICE_SEMANTICS,
                 "licence_class": licence,
@@ -117,6 +132,7 @@ def build_odds_tables(
             }
     for eid, row in seen.items():
         row["commence_time_versions"] = len(commence_versions[eid])
+        row["commence_time_earliest_utc"] = min(commence_versions[eid])
     events = (
         validate_odds_table("odds_events", pl.DataFrame(list(seen.values())))
         if seen

@@ -1,0 +1,61 @@
+# PRE-REGISTERED PROTOCOL — frozen 2026-11-01 before any real odds were acquired or viewed.
+# Any change requires a new protocol_id (and a new entry in docs/DECISIONS.md); never edit in place.
+protocol_id: market-benchmark-v1
+frozen_on: 2026-11-01
+purpose: >-
+  Probability-quality comparison of Phase 2 Elo (and the ranking baseline) against de-vigged
+  bookmaker probabilities on identical ATP Grand Slam main-draw matches. Not a trading or
+  profitability test.
+
+population:
+  provider: the_odds_api
+  sport_keys: [tennis_atp_aus_open_singles, tennis_atp_french_open, tennis_atp_wimbledon, tennis_atp_us_open]
+  canonical_levels: [G]
+  main_draw_only: true
+  tournament_start_from: 2020-01-01
+  tournament_start_to: 2022-12-31     # 2023-2024 = late-check years (1 look left); never used here
+  require_gate0_eval_eligible: true
+  require_link_status: linked
+
+model_predictions:
+  phase2_run_id: 0a5b056019ec        # frozen inner-fold run; predictions are not refit
+  elo_column: p_elo_overall_recal
+  rank_column: p_rank_recal
+
+timing:
+  decision_lead_minutes: 60           # decision = earliest provider start time seen - 60 min
+  anchor: earliest_observed_commence_time
+  primary_max_staleness_minutes: 30
+  sensitivity_max_staleness_minutes: [15, 60]
+  missing_source_time: reject
+
+market:
+  region: eu
+  market: match_winner
+  primary_reference_bookmaker: pinnacle
+  primary_adequacy_min_availability: 0.80   # share of linked population with an available quote
+  fallback_rule: highest_availability_outcome_blind   # ties broken alphabetically
+  consensus_min_bookmakers: 2               # secondary reference: median, labelled non-executable
+  devig_primary: proportional
+  devig_secondary: [power, shin]
+
+metrics:
+  primary: [paired_log_loss_difference, paired_brier_difference]
+  contrasts:                     # each as (model - market reference); negative favours the model
+    - [elo, market_primary]
+    - [rank, market_primary]
+    - [elo, market_consensus]
+  bootstrap_block: iso_week_of_tournament_start
+  bootstrap_replicates: 2000
+  bootstrap_seed: 20261102
+  confidence_level: 0.95
+  report: [sample_sizes, link_status_counts, coverage_gaps, bookmaker_availability,
+           quote_age_quantiles, calibration, reliability_bins, sensitivity_staleness, sensitivity_devig]
+
+conduct:
+  max_confirmatory_runs: 1        # re-runs only to fix a documented bug; each run is registered
+  information_asymmetry_note: >-
+    Elo features use the conservative day-bound cutoff (earliest instant of the earliest possible
+    match day); market quotes are observed up to 60 minutes before the scheduled start. The market
+    therefore has strictly more information. Results describe probability quality only and are not
+    evidence of a trading signal.

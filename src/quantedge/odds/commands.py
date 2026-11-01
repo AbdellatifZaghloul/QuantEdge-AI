@@ -22,7 +22,10 @@ from quantedge.odds.baseline import (
     market_probabilities,
 )
 from quantedge.odds.coverage import assess_coverage
-from quantedge.odds.identity import PlayerResolver, link_events
+from quantedge.odds.identity import PlayerResolver, link_events, load_tournament_aliases
+from quantedge.odds.pilot import pilot_population, run_pilot
+from quantedge.odds.planner import build_plan
+from quantedge.odds.preregistration import load_protocol
 from quantedge.odds.schemas import validate_odds_table
 from quantedge.odds.selector import SelectorConfig, decisions_from_schedule, select_quotes
 from quantedge.odds.store import CaptureStore, Stream
@@ -249,3 +252,80 @@ def compare_cmd(
     columns = ["p_elo_overall_recal", "p_rank_recal", "p_proportional_a", "p_power_a", "p_shin_a"]
     result = compare_on_identical_population(frame, columns, holdout_start=splits.holdout_start)
     typer.echo(json.dumps(result, indent=2, default=str))
+
+
+Protocol = Annotated[Path, typer.Option(help="Pre-registered protocol YAML.")]
+DEFAULT_PROTOCOL = Path("configs/preregistration/market_benchmark_v1.yaml")
+
+
+@odds_app.command("plan")
+def plan_cmd(
+    protocol_path: Protocol = DEFAULT_PROTOCOL,
+    probe_max_credits: int = 40,
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """Dry-run acquisition plan: zero network calls, zero credits."""
+    protocol, sha = load_protocol(protocol_path)
+    tables = load_tables(resolve_build_dir(data_root / "processed"))
+    view = DataView(tables, load_split_config(config_dir / "splits.yaml"))
+    matches, tournaments = view.table("matches"), view.table("tournaments")
+    api = _api_config(config_dir, None)
+    plan = build_plan(
+        matches,
+        tournaments,
+        build_eligibility(matches, tournaments),
+        protocol,
+        probe_max_credits=probe_max_credits,
+        markets=api.markets,
+        regions=api.regions,
+    )
+    typer.echo(
+        json.dumps(
+            {"protocol_id": protocol.protocol_id, "protocol_sha256": sha, **plan},
+            indent=2,
+            default=str,
+        )
+    )
+
+
+@odds_app.command("pilot-compare")
+def pilot_compare_cmd(
+    protocol_path: Protocol = DEFAULT_PROTOCOL,
+    stream: Annotated[str, typer.Option(help="Odds stream with linked events.")] = "historical",
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+    runs_root: Annotated[Path, typer.Option(help="Experiment registry root.")] = Path("runs"),
+) -> None:
+    """Run the pre-registered pilot comparison (needs acquired, linked historical odds)."""
+    protocol, sha = load_protocol(protocol_path)
+    out = data_root / "processed" / "odds" / PROVIDER / stream
+    needed = [
+        out / f for f in ("odds_events.parquet", "odds_quotes.parquet", "event_links.parquet")
+    ]
+    if not all(p.exists() for p in needed):
+        typer.echo("no linked odds available; acquisition requires owner approval", err=True)
+        raise typer.Exit(code=1)
+    events, quotes, links = (pl.read_parquet(p) for p in needed)
+    splits = load_split_config(config_dir / "splits.yaml")
+    tables = load_tables(resolve_build_dir(data_root / "processed"))
+    view = DataView(tables, splits)
+    matches, tournaments = view.table("matches"), view.table("tournaments")
+    predictions = pl.read_parquet(
+        runs_root / protocol.model_predictions.phase2_run_id / "test_predictions.parquet"
+    )
+    names = {k[1]: v[0] for k, v in load_tournament_aliases().items() if k[0] == PROVIDER}
+    population = pilot_population(
+        matches, tournaments, build_eligibility(matches, tournaments), predictions, protocol, names
+    )
+    report = run_pilot(
+        protocol=protocol,
+        protocol_sha256=sha,
+        population=population,
+        events=events,
+        quotes=quotes,
+        links=links,
+        predictions=predictions,
+        holdout_start=splits.holdout_start,
+    )
+    typer.echo(json.dumps(report, indent=2, default=str))

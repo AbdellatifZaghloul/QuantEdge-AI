@@ -47,6 +47,8 @@ QUALITY_FLAGS = (
     "observed_after_commence",  # in-play or late snapshot
     "commence_time_changed",  # event rescheduled across snapshots
     "unknown_market",
+    "snapshot_after_request",  # historical snapshot stamped later than the time requested
+    "source_time_missing",  # no market-level source timestamp (age unknown)
 )
 
 
@@ -68,6 +70,7 @@ ODDS_TABLES: dict[str, tuple[Col, ...]] = {
         Col("participant_1", pl.String()),
         Col("participant_2", pl.String()),
         Col("commence_time_utc", UTC_DT),
+        Col("commence_time_earliest_utc", UTC_DT),
         Col("first_observed_utc", UTC_DT),
         Col("last_observed_utc", UTC_DT),
         Col("commence_time_versions", pl.Int32()),
