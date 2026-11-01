@@ -1,6 +1,6 @@
 # QuantEdge AI — Roadmap
 
-Status: **Phase 1 approved 2026-11-01 (D-05, D-10…D-14, D-16, D-17).**
+Status: **Phase 1 accepted (provisional); Phase 2 complete 2026-11-01 — awaiting approval for Phase 3.** See [reviews/phase-2.md](reviews/phase-2.md).
 Each phase ends with `docs/reviews/phase-N.md` (real counts, deviations, open issues) and owner approval.
 Decision IDs refer to [DECISIONS.md](DECISIONS.md).
 

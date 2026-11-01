@@ -3,7 +3,8 @@
 Research platform for ATP men's singles: calibrated pre-match probabilities, market comparison and
 risk-aware *paper* staking analysis. **Research use only. No automated or real-money betting.**
 
-Status: **Phase 1 — data foundation.** No ratings, models, odds or betting simulation exist yet.
+Status: **Phase 2 — Elo baselines and honest evaluation** (development data only; no odds, no betting
+simulation; the 2025+ holdout is sealed). See [docs/reviews/phase-2.md](docs/reviews/phase-2.md).
 See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What Phase 1 provides
@@ -28,6 +29,8 @@ uv run quantedge data fetch      # download + verify the pinned snapshot into da
 uv run quantedge data verify     # offline re-verification of every file hash
 uv run quantedge data build      # canonical Parquet tables -> data/processed/<build_id>/
 uv run quantedge data qa         # qa_report.json / qa_report.md for the latest build
+uv run quantedge data audit      # Gate 0 eligibility + anomaly audit (build_dir/derived/)
+uv run quantedge experiment run  # Elo vs ranking baseline, nested walk-forward 2013-2022 -> runs/
 uv run pytest -m "not local"     # synthetic-fixture tests (what CI runs)
 uv run pytest                    # also runs real-data tests when data/ is present
 ```
@@ -35,7 +38,8 @@ uv run pytest                    # also runs real-data tests when data/ is prese
 ## Data, licensing and attribution
 
 - Raw and derived research data live only under `data/`, which is gitignored and never committed.
-  This repository contains code, documentation and **synthetic** test fixtures only.
+  This repository contains code, documentation, **synthetic** test fixtures and aggregate result
+  figures (with attribution) only; no row-level research data.
 - Match results and statistics: Jeff Sackmann / Tennis Abstract, licensed
   [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), obtained via the
   [tennis-sackmann-archive](https://github.com/Aneeshers/tennis-sackmann-archive) mirror and modified
@@ -48,4 +52,5 @@ uv run pytest                    # also runs real-data tests when data/ is prese
 
 [Architecture](docs/ARCHITECTURE.md) · [Data sources](docs/DATA_SOURCES.md) ·
 [Validation](docs/VALIDATION.md) · [Roadmap](docs/ROADMAP.md) · [Decisions](docs/DECISIONS.md) ·
-[Open-source audit](docs/OPEN_SOURCE_AUDIT.md) · [Phase 1 review](docs/reviews/phase-1.md)
+[Open-source audit](docs/OPEN_SOURCE_AUDIT.md) · [Phase 1 review](docs/reviews/phase-1.md) ·
+[Phase 2 review](docs/reviews/phase-2.md)

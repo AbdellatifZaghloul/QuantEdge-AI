@@ -3,7 +3,7 @@
 Status values: **Accepted** (owner directive or approved), **Proposed** (recommended default; becomes Accepted on
 approval), **Open** (needs owner input). "Blocks" names the earliest phase that cannot start without the decision.
 
-Last updated: 2026-11-01 (Phase 1 approval).
+Last updated: 2026-11-01 (Phase 2 completion).
 
 ---
 
@@ -21,6 +21,9 @@ Last updated: 2026-11-01 (Phase 1 approval).
 | D-12 | Determinism = identical canonical content hash per table. Byte-identical Parquet is a goal, not a gate | Owner approval 2026-11-01 |
 | D-13 | Chronology: knowability rule (K) + earlier-round exception (P, outcome fields only) + conservative UTC+14/UTC−12 day-instant bounds. P′ off | Owner approval 2026-11-01 |
 | D-14 | Identity and orientation, **as amended**: <br>• canonical player IDs `sackmann:<int>`; <br>• `match_key` over tournament ID, season, draw category, round and the unordered canonical pair; <br>• deterministic collision resolution: exact-duplicate removal, then a `match_num` discriminator only when all colliding rows have distinct `match_num`, else quarantine; <br>• orientation bit from SHA-256 of the key (`qe.orient.v1`). <br>The winner never enters any identifier or the orientation. `match_num` is an ordering hint only | Owner approval 2026-11-01, subject to the corrections now in ARCHITECTURE.md §4 |
+| D-09 | Gate 0 eligibility policy `eligibility.v1` (owner-specified defaults): walkovers no update; retirements, played defaults and unterminated incomplete scores flagged and excluded from baseline updates (sensitivity variant includes them); unplayed defaults excluded; unresolved contradictions (placeholders, contradictory duplicates, knockout and score contradictions) excluded from training and evaluation with reasons retained; round-label conflicts update only after the tournament end bound. See docs/reviews/phase-2.md §1 | Owner directive, Phase 2 |
+| D-23 | Placeholder identities `sackmann:199999` (U Unknown) and `sackmann:200816` (Bye1) are not players; curated in `reference/placeholder_players.csv` | Phase 2 Gate 0 evidence |
+| D-24 | Phase 2 model version `phase2-elo-v1`: FiveThirtyEight K, nested per-fold selection, slope-only recalibration, conservative ordering. Sensitivity winners (e.g. retirement-included updates) are **not** adopted without a new pre-registered version | Phase 2 protocol |
 | D-17 | Fetch from `Aneeshers/tennis-sackmann-archive` at full commit `83733587353df8a41f2fd4f516147d5aa83f5a8d`. Verify git blob SHA-1s against the tree at that commit and record our own SHA-256 manifest | Owner approval 2026-11-01 |
 
 ---
@@ -31,7 +34,6 @@ Last updated: 2026-11-01 (Phase 1 approval).
 |---|---|---|---|
 | D-03b | Use of tennis-data.co.uk | Manual download. Private, untimed **evaluation benchmark only**: not a training feature, not a calibration target. Never committed or published at row level. Tier C results kept **out of the public portfolio** by default | P3 |
 | D-06 | The Odds API purchase | After P2: one month on the 20K plan (verified $30/mo) for a **coverage probe**. Check which books and markets exist for ATP keys, and whether totals/handicaps exist historically. Then decide on a historical pull plus forward capture | P3 |
-| D-09 | Retirement/walkover handling in ratings | Walkovers: no update. Retirements: no update by default, with "update with reduced K if ≥ 1 set completed" evaluated in-fold. Defaults/abandoned: no update | P2 |
 | D-18 | Round day bounds values | P1 authors conservative bounds with written rationale. P3 validates them against Odds API `commence_time` and widens them where violated | P2 (used by Elo) |
 | D-19 | Scoring-format table | Each final-set rule row cites a primary source (tournament or ATP rulebook). Unsourced rows block P4 pricing for that event | P4 |
 | D-20 | Execution-model defaults | Latency 60 s; slippage grid {0, 1, 2, 3}% of odds; max stake grid. Always reported as unverified sensitivity | P6 |

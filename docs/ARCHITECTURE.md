@@ -259,6 +259,12 @@ be enabled only if a sensitivity study shows it is safe.
 - A **naive sequential** variant (order by start date then round ordinal) is kept *only* as a sensitivity comparison.
   The gap between the two variants measures leakage exposure.
 
+### 5.6a Eligibility gate (Phase 2, `quantedge.curation`)
+Before any stateful replay, every match passes the deterministic Gate 0 policy (`eligibility.v1`): it
+decides whether a result may update ratings, whether a match may be evaluated, and whether its
+knowability must be deferred to the tournament end (doubtful round labels). Excluded records keep
+their provenance and reason. Details: docs/reviews/phase-2.md §1.
+
 ### 5.7 Forbidden inputs (enforced by schema tags)
 - Any field of match *m* tagged `post_match`: score, stats, minutes, outcome type, `a_won`.
 - Closing or post-cutoff odds for *m*.

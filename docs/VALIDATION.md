@@ -81,6 +81,7 @@ wherever comparable contemporaneous odds exist, but beating them is required **o
 | Data pipeline | Faithful canonical tables | n/a | Phase acceptance tests | All pass |
 | M0 de-vig | Market → probability | Multiplicative method | Log loss on outcomes (development, odds-covered) | Method choice fixed before P5 |
 | M1 Elo | Pre-match P(win) | Coin flip; in-fold logistic on log-rank difference | Log loss; Brier; calibration slope/intercept | Beats rank baseline: mean per-match log-loss gain > 0 with 95% block-bootstrap CI excluding 0 |
+| M1 Elo — Phase 2 result | Recorded | Ranking baseline (identical population) | Δ log loss −0.0101 [−0.0121, −0.0080] on 2013–2022 inner folds; see reviews/phase-2.md | Kept |
 | M1 vs market | Context only | De-vigged market on the same matches | Log-loss gap with CI | **Reported, not a gate** |
 | M2 serve/return | Next-match serve-point win rate | Tour average; player's raw to-date average | Binomial deviance per point (weighted) | Beats both baselines with CI |
 | M3 Markov/MC | Distributions of games, sets, margins given inputs | (a) Analytic identities; (b) empirical distribution conditional on match-probability bucket (fit in-fold) | Correctness tests; PIT uniformity; central-interval coverage; CRPS for total games | All correctness tests pass; coverage within tolerance; CRPS ≤ empirical baseline |
