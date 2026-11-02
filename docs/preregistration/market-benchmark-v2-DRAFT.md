@@ -39,8 +39,8 @@ T_d = local(d, 10:00)
   - Rest days and expected no-ATP-singles days are requested too, and reported as `rest_day` or
     `expected_no_atp_singles` rather than skipped.
   - The calendar is fixed before any purchase and never derived from returned data. Days outside it are refused.
-  - **Date verification vs complete-calendar verification.** First and last days are organizer-sourced for 9 editions
-    and organizer-derived for Wimbledon 2022 (`dates_verified`). Rest-day and expected-empty columns are
+  - **Date verification vs complete-calendar verification.** First and last days are organizer-sourced for all 10
+    editions (`dates_verified`). Rest-day and expected-empty columns are
     reporting-only labels under a documentary waiver: every day is requested regardless. They stay marked as
     assumptions, so complete-calendar `verified` is `false` for every row.
 - **As-of snapshot S_d:** the provider snapshot returned for `date = T_d`. It is admissible only if

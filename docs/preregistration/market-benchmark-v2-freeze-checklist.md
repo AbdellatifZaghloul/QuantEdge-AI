@@ -28,13 +28,12 @@ Where a reviewer-supplied link could not be retrieved, another organizer page wa
 | RG 2021 | 30 May – 13 Jun 2021 | organizer | "the main draw will kick off on Sunday 30th May"; event "From 24th May to 13th June", which includes qualifying (12 May 2021) | [rolandgarros.com](https://www.rolandgarros.com/en-us/article/roland-garros-2021-new-tournament-schedule-day-night-sessions) |
 | RG 2022 | 22 May – 5 Jun 2022 | organizer | Event "runs from 16 May to 5 June 2022", which includes qualifying and establishes the last day (8 Mar 2022). Day-1 order of play for Sunday 22 May ([21 May 2022](https://www.rolandgarros.com/en-us/article/order-of-play-sunday-day-1-rg2022)) establishes the first main-draw day | [rolandgarros.com](https://www.rolandgarros.com/en-us/article/roland-garros-2022-opening-official-ticketing) |
 | Wimbledon 2021 | 28 Jun – 11 Jul 2021 | organizer | Official Compendium 2021, scheduled dates of meeting: "2021 (13) Mon 28 June – Sun 11 July" | [Compendium 2021 PDF](https://www.wimbledon.com/pdf/Wimbledon_Compendium_2021v3.pdf) |
-| Wimbledon 2022 | 27 Jun – 10 Jul 2022 | **organizer-derived** | The 2022 visitor guide fixes "Middle Sunday (Sunday 3 July)" as a permanent part of the schedule, and the Compendium says "a 14-day tournament from 2022 onwards". That implies Mon 27 June – Sun 10 July. **Neither date is stated verbatim in the retrievable text.** Secondary: [Wikipedia](https://en.wikipedia.org/wiki/2022_Wimbledon_Championships) states 27 June – 10 July | [2022 guide PDF](https://www.wimbledon.com/pdf/CH_2022_Easy_Access_Guide_v8_DIGI.pdf) |
+| Wimbledon 2022 | 27 Jun – 10 Jul 2022 | organizer | Official Easy Access Guide 2022, **page 1 (cover)**: "THE CHAMPIONSHIPS, WIMBLEDON — MONDAY 27 JUNE – SUNDAY 10 JULY 2022". The earlier "derived" grade came from a case-sensitive text search; it is corrected here | [2022 guide PDF](https://www.wimbledon.com/pdf/CH_2022_Easy_Access_Guide_v8_DIGI.pdf) |
 | US Open 2020 | 31 Aug – 13 Sep 2020 | organizer | "set to be played in Flushing Meadows, N.Y., on its originally scheduled dates of Aug. 31-Sept. 13", without fans (USTA, 17 Jun 2020). The reviewer's usopen.org article is JavaScript-rendered and returned no text | [usta.com](https://www.usta.com/en/home/pro/pro-media---news/2020-us-open--western---southern-open-to-be-held-in-new-york.html) |
 | US Open 2021 | 30 Aug – 12 Sep 2021 | organizer | "2021 US OPEN AUGUST 30 - SEPTEMBER 12". The reviewer's usopen.org article is JavaScript-rendered and returned no text | [usopen.org PDF](https://www.usopen.org/pdf/2021-Net-Generation-Virtual-Wildcard.pdf) |
 | US Open 2022 | 29 Aug – 11 Sep 2022 | organizer | "The 2022 US Open main draw runs Monday, Aug. 29, to Sunday, Sept. 11" (USTA, 20 Jul 2022) | [usta.com](https://www.usta.com/en/home/pro/pro-media---news/serena-in--u-s--leads-all-nations-in-initial-2022-us-open-single.html) |
 
-- **Result:** first and last days are organizer-stated for **9 / 10** editions and organizer-derived for **1 / 10**
-  (Wimbledon 2022).
+- **Result:** first and last days are organizer-stated for **all 10 / 10** editions.
 - **The calendar's dates were confirmed, not changed:** all 143 planned days are identical, and a test asserts this.
 
 ## 2. Rest days, expected empty days, and the documentary waiver
@@ -105,8 +104,8 @@ Charging: 10 per region per market; "Responses with empty data do not count towa
 
 | Input | SHA-256 at this package |
 |---|---|
-| `src/quantedge/reference/v2_draft_edition_calendar.csv` → `calendar_sha256` | `9f7da1467f09c0ab5c10a1cde9b36a9c84811e50cbd0605e15226351b6582484` |
-| `docs/preregistration/market-benchmark-v2-CANDIDATE.yaml` (candidate text) | `8d59e5d4e5bf9e0cca2bce5018b0f12b521361b99f82e3c1b0f0c9b131433862` |
+| `src/quantedge/reference/v2_draft_edition_calendar.csv` → `calendar_sha256` | `2db8ee7b0b041e2eba54d3926a8566d5350eed9e9e6ae537c1af5c0f0227d4a1` |
+| `docs/preregistration/market-benchmark-v2-CANDIDATE.yaml` (candidate text) | `0f3cca23c117b29d4d712b697dd68c9003221f40d745dff17d34f7061a9befdf` |
 | `src/quantedge/odds/v2_draft.py` (decision, identity, tranche and audit rules) | `ba505b20cf7eac8442be0190eb85f02ead19b2b434ad642f2716814ee2eb02a7` |
 | `src/quantedge/odds/stage.py` (runner, strict window, ledger) | `7c7b692b9f2952a9270c87b3ee319dcb30582144c2e406af98730228dc89c512` |
 | Feasibility manifest / tranche plan | `df880fd4…aceb2` / `605a7eea…1411` (full values in §5) |
@@ -121,8 +120,7 @@ The frozen file's hash differs from the candidate's, because those three fields 
 
 ## 7. Owner checklist
 
-- [ ] Accept the first/last-day evidence (§1), including the derived Wimbledon 2022 dates, or supply a verbatim
-  organizer statement for them.
+- [ ] Accept the first/last-day evidence (§1): organizer-stated for all 10 editions.
 - [ ] Accept or reject the reporting-only waiver for rest and expected-empty days (§2).
 - [ ] Accept the start-of-play evidence (§3) with its residual coverage risk.
 - [ ] Confirm the programme ceiling of **1,430**. The 143 contingency needs separate future approval; the 70 for

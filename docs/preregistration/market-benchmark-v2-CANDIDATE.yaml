@@ -19,7 +19,7 @@ population:
   calendar_file: src/quantedge/reference/v2_draft_edition_calendar.csv
   calendar_sha256: SET_AT_FREEZE        # SHA-256 of calendar_file at freeze
   calendar_verification:
-    first_and_last_days: organizer_required   # 9 editions organizer-stated, wim-2022 organizer-derived
+    first_and_last_days: organizer_required   # all 10 editions organizer-stated
     rest_days: reporting_only_waiver           # every calendar day is requested; labels only
     expected_empty_days: reporting_only_waiver # every calendar day is requested; labels only
     complete_calendar_verified: false          # no edition has every field officially sourced

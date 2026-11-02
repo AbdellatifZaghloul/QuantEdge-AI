@@ -439,3 +439,15 @@ Details and exact quotations are in `docs/preregistration/market-benchmark-v2-fr
 - **Budget:** programme ceiling 1,430 (feasibility 70 included); contingency 143 only by separate approval.
 - **Unchanged and re-verified:** the two-tranche implementation and its files.
 - **Disclosure:** one search snippet incidentally showed a single 2022 Wimbledon match result; it was not used.
+
+## 15. Correction (2026-11-03): Wimbledon 2022 dates are organizer-stated
+
+Page 1 (cover) of the official Easy Access Guide 2022 reads "THE CHAMPIONSHIPS, WIMBLEDON — MONDAY 27 JUNE – SUNDAY
+10 JULY 2022". It was re-checked locally from the PDF text layer.
+
+- §14's "organizer-derived" grade came from a case-sensitive search and is withdrawn.
+- **All 10 / 10** first and last days are now organizer-stated, with no date changes.
+- Rest-day and expected-empty columns remain unverified, reporting-only assumptions under the waiver, and
+  complete-calendar `verified` stays false.
+- The 10:00 local rule, the 60-minute minimum listed lead, the 1,430 ceiling and the separate 20 + 50 approvals are
+  unchanged.

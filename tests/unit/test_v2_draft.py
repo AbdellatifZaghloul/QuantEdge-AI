@@ -762,9 +762,8 @@ def test_partial_acquisition_audit_lists_pending_days(tmp_path: Path) -> None:
 
 def test_calendar_date_evidence_is_organizer_level_and_nothing_fully_verified() -> None:
     cal = load_calendar()
-    levels = {e: c.dates_verified for e, c in cal.items()}
-    assert levels.pop("wim-2022") == "organizer_derived"  # dates derived, not stated verbatim
-    assert set(levels.values()) == {"organizer"}
+    assert {c.dates_verified for c in cal.values()} == {"organizer"}  # all 10 organizer-stated
+    assert "page 1" in dict(cal["wim-2022"].evidence)["dates_evidence"]
     for c in cal.values():
         ev = dict(c.evidence)
         assert "https://" in ev["dates_evidence"]
