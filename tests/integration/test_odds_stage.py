@@ -554,3 +554,42 @@ def test_lagging_markets_fail_freshness(tmp_path: Path) -> None:
     result = audit(tmp_path, bodies)
     assert result["checks"]["c1_ge1_available"] is False
     assert result["checks"]["c3_median_age"] is False and result["go"] is False
+
+
+def test_quote_age_populations_are_explicit(tmp_path: Path) -> None:
+    # Ages at decision = gap + source lag. Request 02 (snapshot 12:25) lags 20 min:
+    # e03 (gap 5) -> 25 min, available; e04 (gap 11) -> 31 min, stale. All other events lag 4.
+    m = plan()
+    bodies = [
+        stage_body(s, request_starts(m, i), lag_minutes=20 if i == 1 else 4)
+        for i, s in enumerate(snaps(m))
+    ]
+    metrics = audit(tmp_path, bodies)["metrics"]
+    # Available ages (2 books each): e01 9, e02 19, e03 25, e05 12, e06 9 -> median 12.
+    assert metrics["median_quote_age_available_minutes"] == pytest.approx(12.0)
+    # The gating population adds the stale e04 pair (31, 31): median (12 + 19) / 2.
+    assert metrics["median_quote_age_minutes"] == pytest.approx(15.5)
+    # Event-weighted: medians 9, 19, 25, 12, 9 -> 12.
+    assert metrics["median_event_quote_age_minutes"] == pytest.approx(12.0)
+    assert metrics["share_events_ge1_available"] == pytest.approx(5 / 6)
+    assert metrics["freshness_sensitivity"] == {
+        "15": {"ge1": pytest.approx(0.5), "ge2": pytest.approx(0.5)},
+        "60": {"ge1": 1.0, "ge2": 1.0},
+    }
+
+
+def test_gating_age_never_below_available_age(tmp_path: Path) -> None:
+    m = plan()
+    bodies = [stage_body(s, request_starts(m, i), lag_minutes=24) for i, s in enumerate(snaps(m))]
+    metrics = audit(tmp_path, bodies)["metrics"]
+    assert metrics["median_quote_age_available_minutes"] <= 30.0
+    assert metrics["median_quote_age_minutes"] >= metrics["median_quote_age_available_minutes"]
+
+
+def test_moved_anchor_unavailability_is_counted(tmp_path: Path) -> None:
+    m = plan()
+    bodies = [stage_body(s, request_starts(m, i)) for i, s in enumerate(snaps(m))]
+    moved = request_starts(m, 1) | {"e03": STARTS["e03"] - timedelta(minutes=20)}
+    bodies[1] = stage_body(snaps(m)[1], moved)
+    metrics = audit(tmp_path, bodies)["metrics"]
+    assert (metrics["anchor_moved_events"], metrics["anchor_moved_unavailable"]) == (1, 1)

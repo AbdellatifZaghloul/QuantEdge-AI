@@ -447,6 +447,23 @@ GO_CRITERIA = {
     "share_events_linked": 0.90,
 }
 PROBE_QUARANTINE_REASONS = frozenset({"price_not_above_one"})  # reason classes seen in the probe
+SENSITIVITY_FRESHNESS_MINUTES = (15.0, 60.0)  # market-benchmark-v1 sensitivities; reported only
+
+
+def _median(values: pl.Series) -> float | None:
+    values = values.drop_nulls()
+    return float(values.cast(pl.Float64).median()) if values.len() else None  # type: ignore[arg-type]
+
+
+def _per_event_availability(events: pl.DataFrame, priced: pl.DataFrame) -> pl.DataFrame:
+    counts = priced.group_by("event_id").agg(
+        (pl.col("status") == "available").sum().alias("n_available")
+    )
+    return (
+        events.select("event_id", "provider_event_id", "commence_time_earliest_utc")
+        .join(counts, on="event_id", how="left")
+        .with_columns(pl.col("n_available").fill_null(0))
+    )
 
 
 def stage_audit(
@@ -462,8 +479,18 @@ def stage_audit(
     """Outcome-blind go/no-go evaluation of a completed stage under the frozen timing rule.
 
     Decisions use the frozen anchor (earliest scheduled start ever observed - lead), not the
-    manifest's planning anchor; events whose anchor moved are reported. Quote age at decision is the
-    selector's ``staleness_minutes`` of each bookmaker's newest admissible complete h2h quote.
+    manifest's planning anchor; events whose anchor moved are reported.
+
+    Quote-age populations (all ages are the selector's ``staleness_minutes`` at decision):
+
+    - ``median_quote_age_minutes`` (gates c3, as pre-specified before any stage data): each
+      bookmaker's newest admissible complete h2h quote, *available or stale*. It is the
+      conservative choice: adding stale quotes can only raise the median, and it is not truncated
+      at the freshness limit;
+    - ``median_quote_age_available_minutes``: only quotes that pass freshness (the quotes that
+      would enter probabilities); bounded by the freshness limit, reported, not gating;
+    - ``median_event_quote_age_minutes``: median over events of each event's median available
+      age, so events with many bookmakers do not dominate; reported, not gating.
     """
     planned = {e.provider_event_id: e for r in manifest.requests for e in r.events}
     ev = events.filter(
@@ -475,17 +502,7 @@ def stage_audit(
         quotes, decisions, SelectorConfig(max_staleness_minutes=freshness_minutes)
     )
     priced = selected.filter(pl.col("bookmaker_key").is_not_null())
-    per_event = (
-        ev.select("event_id", "provider_event_id", "commence_time_earliest_utc")
-        .join(
-            priced.group_by("event_id").agg(
-                (pl.col("status") == "available").sum().alias("n_available")
-            ),
-            on="event_id",
-            how="left",
-        )
-        .with_columns(pl.col("n_available").fill_null(0))
-    )
+    per_event = _per_event_availability(ev, priced)
     later = {pid for pid, e in planned.items() if e.discovered_later}
     n = len(planned)  # planned events absent from every snapshot count as unavailable
 
@@ -498,6 +515,13 @@ def stage_audit(
         for row in ev.iter_rows(named=True)
     )
     ages = priced["staleness_minutes"].drop_nulls()
+    available = priced.filter(pl.col("status") == "available")
+    event_ages = available.group_by("event_id").agg(pl.col("staleness_minutes").median())
+    sensitivity = {}
+    for minutes in SENSITIVITY_FRESHNESS_MINUTES:
+        alt = select_quotes(quotes, decisions, SelectorConfig(max_staleness_minutes=minutes))
+        alt_events = _per_event_availability(ev, alt.filter(pl.col("bookmaker_key").is_not_null()))
+        sensitivity[f"{minutes:g}"] = {"ge1": share(alt_events, 1), "ge2": share(alt_events, 2)}
     flags = quotes.filter(pl.col("event_id").is_in(ev["event_id"].to_list()))["quality_flags"]
     reasons = set(quarantine["reason_code"].unique().to_list()) if quarantine.height else set()
     linked = (
@@ -514,7 +538,21 @@ def stage_audit(
         "anchor_moved_events": moved,
         "share_events_ge1_available": share(per_event, 1),
         "share_events_ge2_available": share(per_event, 2),
-        "median_quote_age_minutes": float(ages.median()) if ages.len() else None,  # type: ignore[arg-type]
+        "median_quote_age_minutes": _median(ages),
+        "median_quote_age_available_minutes": _median(available["staleness_minutes"]),
+        "median_event_quote_age_minutes": _median(event_ages["staleness_minutes"]),
+        "freshness_sensitivity": sensitivity,
+        "anchor_moved_unavailable": per_event.filter(
+            (pl.col("n_available") == 0)
+            & pl.col("provider_event_id").is_in(
+                [
+                    row["provider_event_id"]
+                    for row in ev.iter_rows(named=True)
+                    if iso(row["commence_time_earliest_utc"])
+                    != planned[row["provider_event_id"]].scheduled_start_utc
+                ]
+            )
+        ).height,
         "discovered_later": {
             "planned": len(later),
             "ge1_available": later_frame.filter(pl.col("n_available") >= 1).height,

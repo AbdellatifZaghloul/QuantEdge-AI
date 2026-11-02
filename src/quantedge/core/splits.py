@@ -34,6 +34,13 @@ class SplitConfig(BaseModel):
             raise ValueError("every fold must end within the development period")
         return self
 
+    @property
+    def inner_end(self) -> date:
+        """Last day of the inner walk-forward folds (the late check and holdout lie after it)."""
+        return (
+            date(max(self.inner_test_years), 12, 31) if self.inner_test_years else self.burn_in_end
+        )
+
 
 @dataclass(frozen=True)
 class Fold:

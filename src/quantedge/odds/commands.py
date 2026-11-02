@@ -13,7 +13,7 @@ import yaml
 
 from quantedge.canonical.build import load_tables, resolve_build_dir
 from quantedge.core.dataview import DataView
-from quantedge.core.splits import load_split_config
+from quantedge.core.splits import SplitConfig, load_split_config
 from quantedge.curation.eligibility import build_eligibility
 from quantedge.odds.baseline import (
     attach_participant_order,
@@ -189,6 +189,21 @@ def build_tables_cmd(
     typer.echo(json.dumps({**result.counts, "out": str(out)}))
 
 
+def identity_view(
+    tables: dict[str, pl.DataFrame], splits: SplitConfig
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Matches and tournaments for identity linking, cut at the end of the inner folds.
+
+    The odds pilot covers 2020-2022 only, so linking never needs (and never reads) the 2023-24
+    late-check rows or the sealed holdout.
+    """
+    view = DataView(tables, splits)
+    return (
+        view.table("matches", end=splits.inner_end),
+        view.table("tournaments", end=splits.inner_end),
+    )
+
+
 @odds_app.command("link")
 def link_cmd(
     stream: Annotated[str, typer.Option(help="prospective | historical")] = "historical",
@@ -199,8 +214,7 @@ def link_cmd(
     out = data_root / "processed" / "odds" / PROVIDER / stream
     events = pl.read_parquet(out / "odds_events.parquet")
     tables = load_tables(resolve_build_dir(data_root / "processed"))
-    view = DataView(tables, load_split_config(config_dir / "splits.yaml"))
-    matches = view.table("matches")
+    matches, tournaments = identity_view(tables, load_split_config(config_dir / "splits.yaml"))
     appearances = pl.concat(
         [
             matches.select(pl.col(c).alias("player_id"), "tournament_start_date")
@@ -208,7 +222,7 @@ def link_cmd(
         ]
     ).unique()
     resolver = PlayerResolver(tables["players"], appearances, PROVIDER)
-    links = link_events(events, matches, view.table("tournaments"), resolver, provider=PROVIDER)
+    links = link_events(events, matches, tournaments, resolver, provider=PROVIDER)
     links = validate_odds_table("event_links", links) if links.height else links
     links.write_parquet(out / "event_links.parquet")
     summary = links.group_by("status").len().sort("status").to_dicts() if links.height else []
