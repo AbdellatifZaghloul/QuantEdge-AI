@@ -393,3 +393,33 @@ uv run quantedge odds link --stream historical
 uv run quantedge odds v2-audit --edition uso-2021 --stages v2a2-feasibility-uso-2021-wk1
 uv run quantedge odds v2-lock --name v2a2-feasibility-uso-2021-wk1                # only after the audit is reported
 ```
+
+## 13. Freeze prerequisites (2026-11-02)
+
+The full package, with source links, is in `docs/preregistration/market-benchmark-v2-freeze-checklist.md`. The
+candidate protocol is `docs/preregistration/market-benchmark-v2-CANDIDATE.yaml`: NOT FROZEN, and pinned to the code
+and calendar by a test. Public web pages were read only for calendar, start-of-play and pricing evidence. There were
+no odds-provider calls and no credits.
+
+- **Calendar:**
+  - 10 / 10 main-draw date ranges match dated secondary sources.
+  - Rest days are sourced for Wimbledon 2021 (Middle Sunday off) and Wimbledon 2022 (Middle Sunday play); the draft
+    calendar was already right on both.
+  - The other rest days and all expected-empty days are assumptions.
+  - **0 / 10** editions are fully verified from official sources, and every row stays `verified = false`.
+- **Start of play:**
+  - 11:00 local is supported on sample days: primary or tour-official for RG 2020, RG 2022, Wimbledon 2021 and US
+    Open 2020; secondary for AO 2021; weak for AO 2022 and US Open 2021; only 2022 provider listings otherwise.
+  - It is not established for every day.
+  - Validity is protected regardless: listings < 60 min after `T_d` are `short_lead`, and earlier actual starts are
+    censored.
+- **Charging:** the provider documents 10 per region per market and no charge for responses with empty data. The
+  budget conservatively assumes all 143 requests are charged: **1,430 base**, plus a separate 143 contingency (1,573
+  maximum, never automatic). A truly empty snapshot (charged 0) stops the runner for review.
+- **Execution safety gap closed:** the US Open 2021 feasibility now runs as **tranche 1 (2 requests, ≤ 20 credits)**,
+  then an offline gate (`v2-tranche-check`), then **tranche 2 (5 requests, ≤ 50 more)**.
+  - Tranche 2 needs a separate approval and a passing, write-once, ledger-bound gate.
+  - Whole-manifest runs are refused, and any stop blocks all tranches until owner review.
+  - Request times are unchanged.
+- **Partial audit:** `v2-audit` audits only the requested days and lists the rest as pending. No complete edition or
+  lock is required.

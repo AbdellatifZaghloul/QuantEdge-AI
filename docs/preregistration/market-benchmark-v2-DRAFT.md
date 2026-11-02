@@ -6,7 +6,9 @@
 > - Freezing requires an explicit owner decision. A YAML file would be created at that point with a new fingerprint
 >   and a `docs/DECISIONS.md` entry, **before** any outcome is accessed.
 >
-> Design rationale and replay: `docs/reviews/market-benchmark-v2-design-review.md`.
+> Design rationale and replay: `docs/reviews/market-benchmark-v2-design-review.md`. Candidate YAML:
+> `docs/preregistration/market-benchmark-v2-CANDIDATE.yaml`. Owner checklist:
+> `docs/preregistration/market-benchmark-v2-freeze-checklist.md`.
 
 ## Question
 
@@ -120,6 +122,12 @@ T_d = local(d, 10:00)
   - A restart skips paid requests (ledger and store) and continues with the next planned day only.
   - `odds v2-lock` writes a write-once lock (manifest and ledger hashes, paid captures). The runner refuses any
     further request for a locked stage.
+- **Feasibility run in tranches:** US Open 2021 week 1 runs as tranche 1 (2 requests, ≤ 20 credits), then an
+  offline gate, then tranche 2 (5 requests, ≤ 50 more). Tranche 2 needs a separate approval and a passing,
+  write-once, ledger-bound gate. A whole-manifest run is refused, and any stop blocks all tranches until owner review
+  (`v2-tranche-plan`, `v2-tranche-run`, `v2-tranche-check`).
+- **Charging:** 10 credits per request (h2h × eu); responses with empty data are not charged by the provider. The
+  budget assumes every request is charged (1,430 base). A charge mismatch stops the runner.
 - **Confirmatory run:** only after all editions are locked.
 - **Budget guard:** the programme ceiling is set by the owner at freeze time. The design central estimate is about
   1,580 credits, including a 10 % contingency that is never auto-used.

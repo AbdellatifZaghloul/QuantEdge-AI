@@ -366,6 +366,7 @@ def _verify_call(
 
 
 LOCK_FILE = "lock.json"
+TRANCHE_FILE = "tranches.json"
 
 
 def _real_events(req: PlannedRequest) -> int:
@@ -380,8 +381,14 @@ def run_stage(
     client: TheOddsApiClient | None = None,
     execute: bool = False,
     clock: Callable[[], datetime] | None = None,
+    allowed_request_ids: frozenset[str] | None = None,
+    credit_cap: int | None = None,
 ) -> list[dict[str, Any]]:
     """Walk the manifest in order; dry run unless ``execute`` (and an approved client) is given.
+
+    ``allowed_request_ids`` restricts the call to one tranche (others are reported, never requested)
+    and ``credit_cap`` lowers the *cumulative* ceiling for this invocation. A stage directory with a
+    tranche plan (``tranches.json``) can only be run tranche by tranche.
 
     Pre-call checks: not already in the ledger or store; cumulative spend + cost <= planned total
     (<= stage ceiling <= 130); client has no automatic retries and a run budget no larger than the
@@ -393,6 +400,12 @@ def run_stage(
     """
     now = clock or (lambda: datetime.now(tz=UTC))
     ceiling = min(manifest.planned_credits, manifest.stage_ceiling, ABSOLUTE_STAGE_CEILING)
+    if credit_cap is not None:
+        ceiling = min(ceiling, credit_cap)
+    if allowed_request_ids is None and (ledger_path.parent / TRANCHE_FILE).exists():
+        raise StageRunStoppedError(
+            f"{manifest.name}: has a tranche plan; run it tranche by tranche"
+        )
     if (ledger_path.parent / LOCK_FILE).exists():
         raise StageRunStoppedError(f"{manifest.name}: acquisition is locked; no further requests")
     has_sentinels = any(
@@ -419,6 +432,9 @@ def run_stage(
             "events": _real_events(req),
             "credits": req.credits,
         }
+        if allowed_request_ids is not None and req.request_id not in allowed_request_ids:
+            report.append(row | {"action": "outside_tranche", "cumulative": spent})
+            continue
         if req.request_id in done or req.expected_snapshot_utc in stored:
             report.append(row | {"action": "skip_already_captured", "cumulative": spent})
             continue

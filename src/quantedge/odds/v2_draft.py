@@ -40,18 +40,21 @@ from quantedge.odds.stage import (
     ABSOLUTE_STAGE_CEILING,
     LOCK_FILE,
     SENTINEL_PREFIX,
+    TRANCHE_FILE,
     LedgerEntry,
     PlannedEvent,
     PlannedRequest,
     StageManifest,
     StagePlanError,
+    StageRunStoppedError,
     grid_floor,
     is_sentinel,
     iso,
     read_ledger,
+    run_stage,
 )
 from quantedge.odds.store import CaptureStore
-from quantedge.odds.theoddsapi import cost_historical_odds, parse_utc
+from quantedge.odds.theoddsapi import TheOddsApiClient, cost_historical_odds, parse_utc
 
 TOURNAMENT_TZ = {
     "tennis_atp_aus_open_singles": "Australia/Melbourne",
@@ -104,7 +107,8 @@ class EditionCalendar:
     rest_days: tuple[date, ...]
     expected_empty_days: tuple[date, ...]
     source: str
-    verified: bool
+    verified: bool  # true only when every field is confirmed from official sources
+    evidence: tuple[tuple[str, str], ...] = ()  # (field, evidence and source) as recorded
 
     def planned_days(self) -> tuple[date, ...]:
         """Every calendar day is requested, rest days included: the acquisition calendar never
@@ -149,6 +153,16 @@ def load_calendar() -> dict[str, EditionCalendar]:
             expected_empty_days=_dates(r["expected_empty_days"]),
             source=r["calendar_source"],
             verified=r["verified"].strip().lower() == "true",
+            evidence=tuple(
+                (k, f"{r[k]} {r.get(k.replace('_evidence', '_source'), '')}".strip())
+                for k in (
+                    "dates_evidence",
+                    "rest_days_evidence",
+                    "empty_days_evidence",
+                    "start_of_play_evidence",
+                )
+                if r.get(k)
+            ),
         )
         if cal.edition_id in out:
             raise V2IntegrationError(f"duplicate edition {cal.edition_id}")
@@ -641,16 +655,26 @@ def v2_audit(
     quotes: pl.DataFrame,
     identity: pl.DataFrame,
     canonical_matches: pl.DataFrame,
+    requested_only: bool = True,
 ) -> dict[str, Any]:
     """Outcome-blind A2 coverage audit with V2 denominators (no V1 ``stage_audit`` reuse).
 
-    ``manifests``: (manifest, ledger entries, locked?) for the stages of this edition.
+    ``manifests``: (manifest, ledger entries, locked?) for the stages of this edition. With
+    ``requested_only`` (default) only days whose request is in a ledger are audited; planned days
+    not yet requested are listed as ``pending_days``. A partial acquisition (e.g. one tranche) is
+    audited as such, and no complete edition or lock is required.
     ``canonical_matches`` needs only identity/timing columns: ``match_key``, ``tournament_id``,
     ``draw_category``, ``match_day_lo``, ``match_day_hi``, ``prediction_cutoff_utc``.
     """
-    days = sorted({d for m, _, _ in manifests for d in manifest_days(m, calendar)})
+    planned: dict[date, bool] = {}
+    for m, ledger, _ in manifests:
+        paid = {e.request_id for e in ledger}
+        for req, d in zip(m.requests, manifest_days(m, calendar), strict=True):
+            planned[d] = planned.get(d, False) or req.request_id in paid
+    days = sorted(d for d, paid in planned.items() if paid or not requested_only)
+    pending = sorted(d for d, paid in planned.items() if not paid and requested_only)
     if not days:
-        raise V2IntegrationError("no manifest days to audit")
+        raise V2IntegrationError("no requested manifest days to audit")
     sport = listings.filter(pl.col("competition_key") == calendar.sport_key)
     pop = apply_validity_censoring(
         day_anchor_population(sport, calendar=calendar, days=days), sport
@@ -709,17 +733,23 @@ def v2_audit(
         )
         .sort("local_day")
     )
+    main_keys = set(main["match_key"].to_list())
+    unique_main_by_day = Counter(
+        r["local_day"] for r in unique.iter_rows(named=True) if r["match_key"] in main_keys
+    )
     credits = sum(ledger[-1].cumulative_credits if ledger else 0 for _, ledger, _ in manifests)
     return {
         "edition": calendar.edition_id,
         "calendar_verified": calendar.verified,
         "audited_days": [d.isoformat() for d in days],
+        "pending_days": [d.isoformat() for d in pending],
         "days": [
             {
                 "day": r["local_day"].isoformat(),
                 "kind": r["day_kind"],
                 "status": r["empty"] or "observed",
                 "in_population": r["in_population"],
+                "unique_canonical_main_draw": unique_main_by_day.get(r["local_day"], 0),
             }
             for r in day_rows.iter_rows(named=True)
         ],
@@ -748,3 +778,184 @@ def v2_audit(
         "credits_spent": credits,
         "all_stages_locked": all(locked for _, _, locked in manifests),
     }
+
+
+# ----------------------------------------------------------------------------------- tranches
+
+
+@dataclass(frozen=True)
+class Tranche:
+    number: int
+    request_ids: tuple[str, ...]
+    max_credits: int  # additional credits this tranche may spend
+    cumulative_cap: int  # ledger total after this tranche can never exceed this
+    requires_gate_of: int | None  # earlier tranche whose offline gate must have passed
+
+
+def _gate_path(stage_dir: Path, number: int) -> Path:
+    return stage_dir / f"tranche-{number}-gate.json"
+
+
+def _stop_path(stage_dir: Path, number: int) -> Path:
+    return stage_dir / f"tranche-{number}-stopped.json"
+
+
+def _ledger_prefix_sha(ledger_path: Path, n: int) -> str:
+    lines = ledger_path.read_text(encoding="utf-8").splitlines()[:n] if ledger_path.exists() else []
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
+
+def write_tranche_plan(
+    stage_dir: Path, *, sizes: Sequence[int], max_credits: Sequence[int]
+) -> list[Tranche]:
+    """Split an existing manifest, in order, into separately approved tranches (write-once).
+
+    The manifest itself is untouched; its SHA-256 is bound into the plan. Each tranche after the
+    first requires a passing offline gate of the previous one.
+    """
+    path = stage_dir / TRANCHE_FILE
+    if path.exists():
+        raise V2IntegrationError(f"{path} already exists")
+    manifest = StageManifest.from_json((stage_dir / "manifest.json").read_text(encoding="utf-8"))
+    if len(sizes) != len(max_credits) or sum(sizes) != len(manifest.requests) or min(sizes) < 1:
+        raise V2IntegrationError("tranche sizes must partition the requests of the manifest")
+    tranches, start, cumulative = [], 0, 0
+    for i, (size, cap) in enumerate(zip(sizes, max_credits, strict=True), start=1):
+        chosen = manifest.requests[start : start + size]
+        if cap < sum(r.credits for r in chosen):
+            raise V2IntegrationError(f"tranche {i}: cap {cap} below its planned cost")
+        cumulative += cap
+        tranches.append(
+            Tranche(i, tuple(r.request_id for r in chosen), cap, cumulative, i - 1 or None)
+        )
+        start += size
+    if cumulative > manifest.planned_credits:
+        raise V2IntegrationError("tranche caps exceed the planned credits of the manifest")
+    plan = {
+        "manifest_sha256": _sha(stage_dir / "manifest.json"),
+        "tranches": [t.__dict__ | {"request_ids": list(t.request_ids)} for t in tranches],
+    }
+    path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return tranches
+
+
+def read_tranche_plan(stage_dir: Path) -> list[Tranche]:
+    plan = json.loads((stage_dir / TRANCHE_FILE).read_text(encoding="utf-8"))
+    if plan["manifest_sha256"] != _sha(stage_dir / "manifest.json"):
+        raise V2IntegrationError("manifest changed after the tranche plan was written")
+    return [
+        Tranche(t["number"], tuple(t["request_ids"]), t["max_credits"], t["cumulative_cap"],
+                t["requires_gate_of"])
+        for t in plan["tranches"]
+    ]  # fmt: skip
+
+
+def run_tranche(
+    stage_dir: Path,
+    number: int,
+    *,
+    store: CaptureStore,
+    client: TheOddsApiClient | None = None,
+    execute: bool = False,
+) -> list[dict[str, Any]]:
+    """Run exactly one tranche of a planned stage (dry run unless ``execute``).
+
+    Refused when any tranche has stopped (a marker is written on a runner stop; an owner decision
+    is needed), or when the required earlier gate is missing, not ``pass``, or no longer matches
+    the ledger it was computed on.
+    """
+    tranches = {t.number: t for t in read_tranche_plan(stage_dir)}
+    if number not in tranches:
+        raise V2IntegrationError(f"no tranche {number}")
+    stopped = sorted(stage_dir.glob("tranche-*-stopped.json"))
+    if stopped:
+        raise StageRunStoppedError(f"{stopped[0].name} present: a tranche stopped; owner review")
+    tranche = tranches[number]
+    ledger_path = stage_dir / "ledger.jsonl"
+    if tranche.requires_gate_of is not None:
+        gate_path = _gate_path(stage_dir, tranche.requires_gate_of)
+        if not gate_path.exists():
+            raise StageRunStoppedError(f"tranche {number} needs {gate_path.name}")
+        gate = json.loads(gate_path.read_text(encoding="utf-8"))
+        if gate["status"] != "pass":
+            raise StageRunStoppedError(f"tranche {tranche.requires_gate_of} gate: {gate['status']}")
+        if gate["ledger_prefix_sha256"] != _ledger_prefix_sha(ledger_path, gate["ledger_entries"]):
+            raise StageRunStoppedError("ledger changed since the gate was computed")
+    manifest = StageManifest.from_json((stage_dir / "manifest.json").read_text(encoding="utf-8"))
+    try:
+        return run_stage(
+            manifest,
+            store=store,
+            ledger_path=ledger_path,
+            client=client,
+            execute=execute,
+            allowed_request_ids=frozenset(tranche.request_ids),
+            credit_cap=tranche.cumulative_cap,
+        )
+    except StageRunStoppedError as exc:
+        if execute:
+            _stop_path(stage_dir, number).write_text(
+                json.dumps({"tranche": number, "reason": str(exc)}) + "\n", encoding="utf-8"
+            )
+        raise
+
+
+def check_tranche(
+    stage_dir: Path, number: int, *, calendar: EditionCalendar, audit_report: dict[str, Any]
+) -> dict[str, Any]:
+    """Offline gate for one tranche (write-once).
+
+    ``pass`` only if every request of the tranche is paid and no later one is, each returned
+    snapshot lies inside ``(T_d - 10 min, T_d]``, spend is within the cumulative cap, the tranche
+    never stopped, and each tranche day is observed with >= 1 unique canonical main-draw match.
+    Anything missing is ``inconclusive``; any violation is ``fail``. Neither unlocks a later
+    tranche.
+    """
+    path = _gate_path(stage_dir, number)
+    if path.exists():
+        raise V2IntegrationError(f"{path} already exists")
+    tranches = {t.number: t for t in read_tranche_plan(stage_dir)}
+    tranche = tranches[number]
+    manifest = StageManifest.from_json((stage_dir / "manifest.json").read_text(encoding="utf-8"))
+    request_days = manifest_days(manifest, calendar)
+    day_of = dict(zip((r.request_id for r in manifest.requests), request_days, strict=True))
+    ledger_path = stage_dir / "ledger.jsonl"
+    ledger = read_ledger(ledger_path)
+    paid = {e.request_id: e for e in ledger}
+    allowed = {rid for t in tranches.values() if t.number <= number for rid in t.request_ids}
+    fails: list[str] = []
+    gaps: list[str] = []
+    if _stop_path(stage_dir, number).exists():
+        fails.append("the tranche stopped during execution")
+    missing = [rid for rid in tranche.request_ids if rid not in paid]
+    if missing:
+        gaps.append(f"unpaid requests: {missing}")
+    if set(paid) - allowed:
+        fails.append("ledger contains requests beyond this tranche")
+    if ledger and ledger[-1].cumulative_credits > tranche.cumulative_cap:
+        fails.append("cumulative credits exceed the tranche cap")
+    days = {d["day"]: d for d in audit_report.get("days", [])}
+    for rid in tranche.request_ids:
+        entry, day = paid.get(rid), day_of[rid]
+        if entry is not None:
+            returned = parse_utc(entry.returned_snapshot_utc)
+            decision = calendar.decision_utc(day)
+            if returned is None or not decision - SNAPSHOT_TOLERANCE < returned <= decision:
+                fails.append(f"{day}: snapshot outside (T_d - 10 min, T_d]")
+        row = days.get(day.isoformat())
+        if row is None:
+            gaps.append(f"{day}: not in the audit report")
+        elif row["status"] != "observed" or row.get("unique_canonical_main_draw", 0) < 1:
+            fails.append(f"{day}: no unique ATP main-draw listing ({row['status']})")
+    status = "fail" if fails else "inconclusive" if gaps else "pass"
+    gate = {
+        "tranche": number,
+        "status": status,
+        "reasons": fails + gaps,
+        "manifest_sha256": _sha(stage_dir / "manifest.json"),
+        "ledger_entries": len(ledger),
+        "ledger_prefix_sha256": _ledger_prefix_sha(ledger_path, len(ledger)),
+        "audit_denominators": audit_report.get("denominators"),
+    }
+    path.write_text(json.dumps(gate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return gate

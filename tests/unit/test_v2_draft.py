@@ -11,11 +11,13 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from quantedge.core.http import HttpResponse
 from quantedge.core.lineage import LicenceClass
+from quantedge.odds import v2_draft
 from quantedge.odds.provider import NormalizedEvent
 from quantedge.odds.stage import (
     LOCK_FILE,
@@ -36,6 +38,7 @@ from quantedge.odds.v2_draft import (
     V2IntegrationError,
     apply_validity_censoring,
     as_of_snapshot,
+    check_tranche,
     day_anchor_manifest,
     day_anchor_population,
     identity_links,
@@ -44,11 +47,15 @@ from quantedge.odds.v2_draft import (
     manifest_days,
     match_pit_decisions,
     opening_anchor_population,
+    read_tranche_plan,
     resolve_identity,
+    run_tranche,
     schedule_listings,
     v2_audit,
     write_lock,
+    write_tranche_plan,
 )
+from tests.conftest import REPO_ROOT
 from tests.fixtures.odds_synthetic import ScriptedTransport, event, historical_body, ok
 
 USO = "tennis_atp_us_open"  # America/New_York; late August is EDT (UTC-4): 10:00 local = 14:00Z
@@ -551,3 +558,245 @@ def test_v2_audit_end_to_end_on_synthetic_captures(tmp_path: Path) -> None:
     assert report["population_status"]["short_lead"] == 1
     assert report["credits_spent"] == 20 and report["all_stages_locked"] is False
     assert [x["status"] for x in report["days"]] == ["observed", "observed"]
+
+
+# ----------------------------------------------------------------------------- two tranches
+
+WEEK = EditionCalendar(**{**CAL.__dict__, "last_day": date(2022, 9, 5), "rest_days": ()})
+WEEK_DAYS = list(WEEK.planned_days())
+
+
+def planned_stage(tmp_path: Path) -> Path:
+    stage = tmp_path / "stage"
+    stage.mkdir(parents=True)
+    m = day_anchor_manifest(name="feas", calendar=WEEK, days=WEEK_DAYS)
+    (stage / "manifest.json").write_text(m.to_json(), encoding="utf-8")
+    write_tranche_plan(stage, sizes=[2, 5], max_credits=[20, 50])
+    return stage
+
+
+def good_body(d: date) -> HttpResponse:
+    snap = WEEK.decision_utc(d) - timedelta(minutes=5)
+    return historical_body(snap, [event(f"p{d.day}", "A", "B", snap + timedelta(hours=2), [])])
+
+
+def responses(days: list[date], start_remaining: int = 1000) -> list[HttpResponse]:
+    return [
+        ok(good_body(d), last=10, remaining=start_remaining - 10 * (i + 1))
+        for i, d in enumerate(days)
+    ]
+
+
+def audit_days(days: list[date], unique: int = 3, status: str = "observed") -> dict[str, object]:
+    return {
+        "days": [
+            {"day": d.isoformat(), "status": status, "unique_canonical_main_draw": unique}
+            for d in days
+        ],
+        "denominators": {"synthetic": True},
+    }
+
+
+def test_tranche_plan_is_bound_write_once_and_validated(tmp_path: Path) -> None:
+    stage = planned_stage(tmp_path)
+    plan = read_tranche_plan(stage)
+    assert [(t.number, len(t.request_ids), t.max_credits, t.cumulative_cap) for t in plan] == [
+        (1, 2, 20, 20),
+        (2, 5, 50, 70),
+    ]
+    assert plan[1].requires_gate_of == 1 and plan[0].requires_gate_of is None
+    with pytest.raises(V2IntegrationError, match="already exists"):
+        write_tranche_plan(stage, sizes=[2, 5], max_credits=[20, 50])
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "manifest.json").write_text((stage / "manifest.json").read_text(encoding="utf-8"))
+    with pytest.raises(V2IntegrationError, match="partition"):
+        write_tranche_plan(other, sizes=[2, 4], max_credits=[20, 50])
+    with pytest.raises(V2IntegrationError, match="below its planned cost"):
+        write_tranche_plan(other, sizes=[2, 5], max_credits=[10, 60])
+    (stage / "manifest.json").write_text(
+        (stage / "manifest.json").read_text(encoding="utf-8") + " ", encoding="utf-8"
+    )
+    with pytest.raises(V2IntegrationError, match="manifest changed"):
+        read_tranche_plan(stage)
+
+
+def test_whole_manifest_run_is_refused_once_tranched(tmp_path: Path) -> None:
+    stage = planned_stage(tmp_path)
+    m = StageManifest.from_json((stage / "manifest.json").read_text(encoding="utf-8"))
+    with pytest.raises(StageRunStoppedError, match="tranche by tranche"):
+        run_stage(m, store=store_at(tmp_path), ledger_path=stage / "ledger.jsonl")
+
+
+def test_second_tranche_needs_a_passing_gate(tmp_path: Path) -> None:
+    stage, store = planned_stage(tmp_path), store_at(tmp_path)
+    dry = run_tranche(stage, 1, store=store)
+    assert [r["action"] for r in dry] == ["would_request"] * 2 + ["outside_tranche"] * 5
+    assert dry[1]["cumulative"] == 20
+    with pytest.raises(StageRunStoppedError, match=r"needs tranche-1-gate.json"):
+        run_tranche(stage, 2, store=store)
+    client, transport = client_for(responses(WEEK_DAYS[:2]), 20)
+    report = run_tranche(stage, 1, store=store, client=client, execute=True)
+    assert [r["action"] for r in report[:2]] == ["requested"] * 2 and len(transport.urls) == 2
+    assert read_ledger(stage / "ledger.jsonl")[-1].cumulative_credits == 20
+    gate = check_tranche(stage, 1, calendar=WEEK, audit_report=audit_days(WEEK_DAYS[:2]))
+    assert gate["status"] == "pass" and gate["ledger_entries"] == 2
+    second, t2 = client_for(responses(WEEK_DAYS[2:], start_remaining=980), 50)
+    report2 = run_tranche(stage, 2, store=store, client=second, execute=True)
+    assert [r["action"] for r in report2] == ["outside_tranche"] * 2 + ["requested"] * 5
+    assert len(t2.urls) == 5 and read_ledger(stage / "ledger.jsonl")[-1].cumulative_credits == 70
+    with pytest.raises(V2IntegrationError, match="already exists"):
+        check_tranche(stage, 1, calendar=WEEK, audit_report=audit_days(WEEK_DAYS[:2]))
+
+
+def test_first_tranche_cannot_use_a_larger_client_budget(tmp_path: Path) -> None:
+    stage = planned_stage(tmp_path)
+    client, transport = client_for(responses(WEEK_DAYS[:2]), 70)
+    with pytest.raises(StageRunStoppedError, match="run budget exceeds"):
+        run_tranche(stage, 1, store=store_at(tmp_path), client=client, execute=True)
+    assert transport.urls == []
+
+
+@pytest.mark.parametrize(
+    ("audit", "status"),
+    [
+        (audit_days(WEEK_DAYS[:2], unique=0), "fail"),  # no ATP main-draw listings
+        (audit_days(WEEK_DAYS[:2], status="snapshot_missing"), "fail"),
+        (audit_days(WEEK_DAYS[:1]), "inconclusive"),  # day 2 missing from the audit
+    ],
+)
+def test_failed_or_inconclusive_gate_never_unlocks_tranche_two(
+    tmp_path: Path, audit: dict[str, object], status: str
+) -> None:
+    stage, store = planned_stage(tmp_path), store_at(tmp_path)
+    client, _ = client_for(responses(WEEK_DAYS[:2]), 20)
+    run_tranche(stage, 1, store=store, client=client, execute=True)
+    assert check_tranche(stage, 1, calendar=WEEK, audit_report=audit)["status"] == status
+    second, t2 = client_for(responses(WEEK_DAYS[2:], start_remaining=980), 50)
+    with pytest.raises(StageRunStoppedError, match=f"gate: {status}"):
+        run_tranche(stage, 2, store=store, client=second, execute=True)
+    assert t2.urls == []
+
+
+def test_incomplete_first_tranche_is_inconclusive(tmp_path: Path) -> None:
+    stage, store = planned_stage(tmp_path), store_at(tmp_path)
+    m = StageManifest.from_json((stage / "manifest.json").read_text(encoding="utf-8"))
+    client, _ = client_for(responses(WEEK_DAYS[:1]), 10)
+    run_stage(
+        m, store=store, ledger_path=stage / "ledger.jsonl", client=client, execute=True,
+        allowed_request_ids=frozenset({m.requests[0].request_id}), credit_cap=10,
+    )  # fmt: skip
+    gate = check_tranche(stage, 1, calendar=WEEK, audit_report=audit_days(WEEK_DAYS[:1]))
+    assert gate["status"] == "inconclusive" and "unpaid" in gate["reasons"][0]
+
+
+def test_a_stopped_tranche_blocks_everything_until_owner_review(tmp_path: Path) -> None:
+    stage, store = planned_stage(tmp_path), store_at(tmp_path)
+    old = WEEK.decision_utc(WEEK_DAYS[1]) - timedelta(minutes=10)  # exactly 10 min: outside
+    client, transport = client_for(
+        [*responses(WEEK_DAYS[:1]), ok(historical_body(old, []), last=10, remaining=980)], 20
+    )
+    with pytest.raises(StageRunStoppedError, match="older than planned"):
+        run_tranche(stage, 1, store=store, client=client, execute=True)
+    assert (stage / "tranche-1-stopped.json").exists() and len(transport.urls) == 2
+    with pytest.raises(StageRunStoppedError, match="stopped"):
+        run_tranche(stage, 1, store=store)
+    gate = check_tranche(stage, 1, calendar=WEEK, audit_report=audit_days(WEEK_DAYS[:2]))
+    assert gate["status"] == "fail"
+
+
+def test_ledger_tampering_after_the_gate_blocks_tranche_two(tmp_path: Path) -> None:
+    stage, store = planned_stage(tmp_path), store_at(tmp_path)
+    client, _ = client_for(responses(WEEK_DAYS[:2]), 20)
+    run_tranche(stage, 1, store=store, client=client, execute=True)
+    check_tranche(stage, 1, calendar=WEEK, audit_report=audit_days(WEEK_DAYS[:2]))
+    ledger = stage / "ledger.jsonl"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(
+            '"cumulative_credits": 20', '"cumulative_credits": 19'
+        )
+    )
+    with pytest.raises(StageRunStoppedError, match="ledger changed"):
+        run_tranche(stage, 2, store=store)
+
+
+def test_partial_acquisition_audit_lists_pending_days(tmp_path: Path) -> None:
+    cal = EditionCalendar(**{**CAL.__dict__, "rest_days": ()})
+    days = list(cal.planned_days())
+    m = day_anchor_manifest(name="syn", calendar=cal, days=days)
+    books = [("bk1", utc(30, 13, 50), 1.8, 2.1), ("bk2", utc(30, 13, 50), 1.75, 2.15)]
+    body = historical_body(
+        utc(30, 13, 55), [event("p1", "A1", "B1", utc(30, 15), books, sport_key=USO)]
+    )
+    store = store_at(tmp_path)
+    client, _ = client_for([ok(body, last=10, remaining=990)], 10)
+    run_stage(
+        m, store=store, ledger_path=tmp_path / "l.jsonl", client=client, execute=True,
+        allowed_request_ids=frozenset({m.requests[0].request_id}), credit_cap=10,
+    )  # fmt: skip
+    built = build_odds_tables_with_quarantine(store, TheOddsApiNormalizer())  # type: ignore[arg-type]
+    links = pl.DataFrame(
+        {"event_id": built.events["event_id"], "status": "linked", "reason": "",
+         "match_key": ["M_p1"], "participant_1_side": "A"}
+    )  # fmt: skip
+    canonical = pl.DataFrame(
+        {"match_key": ["M_p1"], "tournament_id": "t-syn", "draw_category": "tour_main",
+         "match_day_lo": [date(2022, 8, 30)], "match_day_hi": [date(2022, 8, 31)],
+         "prediction_cutoff_utc": [utc(29, 10)]}
+    ).with_columns(pl.col("prediction_cutoff_utc").cast(pl.Datetime("us", "UTC")))  # fmt: skip
+    report = v2_audit(
+        calendar=cal,
+        manifests=[(m, read_ledger(tmp_path / "l.jsonl"), False)],
+        listings=schedule_listings(store),
+        events=built.events,
+        quotes=built.quotes,
+        identity=identity_links(links, built.events),
+        canonical_matches=canonical,
+    )
+    assert report["audited_days"] == ["2022-08-30"]
+    assert report["pending_days"] == ["2022-08-31", "2022-09-01"]
+    assert report["days"][0]["unique_canonical_main_draw"] == 1
+    assert report["all_stages_locked"] is False and report["credits_spent"] == 10
+    assert report["denominators"]["fresh30_ge2_distinct_matches"] == 1
+
+
+def test_calendar_evidence_is_recorded_and_nothing_is_marked_verified() -> None:
+    for cal in load_calendar().values():
+        ev = dict(cal.evidence)
+        assert ev["dates_evidence"].startswith("secondary (Wikipedia)")
+        assert "https://en.wikipedia.org/wiki/" in ev["dates_evidence"]
+        assert cal.verified is False  # official verification of every field is still pending
+    wim = load_calendar()
+    assert "Middle Sunday" in dict(wim["wim-2021"].evidence)["rest_days_evidence"]
+    assert wim["wim-2022"].rest_days == ()
+
+
+# --------------------------------------------------------------------- candidate protocol
+
+
+def test_candidate_protocol_is_not_frozen_and_matches_the_code() -> None:
+    cand = yaml.safe_load(
+        (REPO_ROOT / "docs/preregistration/market-benchmark-v2-CANDIDATE.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert cand["status"] == "CANDIDATE_NOT_FROZEN" and cand["frozen_on"] is None
+    assert cand["population"]["calendar_sha256"] == "SET_AT_FREEZE"
+    assert not (REPO_ROOT / "configs/preregistration/market_benchmark_v2.yaml").exists()
+    timing = cand["timing"]
+    assert timing["decision_local_time"] == v2_draft.DECISION_LOCAL_TIME.strftime("%H:%M")
+    assert timing["snapshot_window_minutes"] * 60 == v2_draft.SNAPSHOT_TOLERANCE.total_seconds()
+    assert timing["min_listed_lead_minutes"] * 60 == v2_draft.MIN_LEAD.total_seconds()
+    assert timing["time_zones"] == v2_draft.TOURNAMENT_TZ
+    cal = load_calendar()
+    assert sorted(cand["population"]["editions"]) == sorted(cal)
+    acq = cand["acquisition"]
+    days = sum(len(c.planned_days()) for c in cal.values())
+    assert acq["planned_requests"] == days == 143
+    assert acq["base_credits"] == days * acq["credits_per_request"] == 1430
+    assert acq["contingency_credits"] == 143
+    feas = acq["feasibility"]
+    assert [str(d) for d in feas["days"]] == [
+        d.isoformat() for d in cal["uso-2021"].planned_days()[:7]
+    ]
+    assert [t["max_credits"] for t in feas["tranches"]] == [20, 50]

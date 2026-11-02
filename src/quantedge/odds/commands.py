@@ -52,12 +52,16 @@ from quantedge.odds.theoddsapi import (
 )
 from quantedge.odds.v2_draft import (
     V2IntegrationError,
+    check_tranche,
     day_anchor_manifest,
     identity_links,
     load_calendar,
+    read_tranche_plan,
+    run_tranche,
     schedule_listings,
     v2_audit,
     write_lock,
+    write_tranche_plan,
 )
 
 odds_app = typer.Typer(no_args_is_help=True, help="Odds infrastructure (Phase 3A).")
@@ -555,14 +559,7 @@ def v2_lock_cmd(
     typer.echo(json.dumps(lock, indent=2))
 
 
-@odds_app.command("v2-audit")
-def v2_audit_cmd(
-    edition: Annotated[str, typer.Option(help="Edition id from the draft v2 calendar.")],
-    stages: Annotated[str, typer.Option(help="Comma-separated stage names of this edition.")],
-    config_dir: ConfigDir = Path("configs"),
-    data_root: DataRoot = Path("data"),
-) -> None:
-    """DRAFT v2: outcome-blind coverage audit (offline; run build-tables and link first)."""
+def _v2_report(edition: str, stages: str, config_dir: Path, data_root: Path) -> dict[str, Any]:
     calendar = load_calendar()[edition]
     manifests = []
     for name in [s for s in stages.split(",") if s]:
@@ -582,7 +579,7 @@ def v2_audit_cmd(
         "match_key", "tournament_id", "draw_category", "match_day_lo", "match_day_hi",
         "prediction_cutoff_utc",
     ]  # fmt: skip
-    report = v2_audit(
+    return v2_audit(
         calendar=calendar,
         manifests=manifests,
         listings=schedule_listings(_store(data_root, "historical")),
@@ -591,4 +588,96 @@ def v2_audit_cmd(
         identity=identity_links(pl.read_parquet(out / "event_links.parquet"), events),
         canonical_matches=matches.select(identity_columns),
     )
+
+
+@odds_app.command("v2-audit")
+def v2_audit_cmd(
+    edition: Annotated[str, typer.Option(help="Edition id from the draft v2 calendar.")],
+    stages: Annotated[str, typer.Option(help="Comma-separated stage names of this edition.")],
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: outcome-blind coverage audit of the requested days (offline)."""
+    report = _v2_report(edition, stages, config_dir, data_root)
     typer.echo(json.dumps(report, indent=2, default=str))
+
+
+@odds_app.command("v2-tranche-plan")
+def v2_tranche_plan_cmd(
+    name: Annotated[str, typer.Option(help="Stage with an existing day-anchor manifest.")],
+    sizes: Annotated[str, typer.Option(help="Requests per tranche, in order, e.g. 2,5.")],
+    max_credits: Annotated[str, typer.Option(help="Additional credits per tranche, e.g. 20,50.")],
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: split a manifest into separately approved tranches (offline, write-once)."""
+    try:
+        tranches = write_tranche_plan(
+            _stage_dir(data_root, name),
+            sizes=[int(x) for x in sizes.split(",")],
+            max_credits=[int(x) for x in max_credits.split(",")],
+        )
+    except V2IntegrationError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps([t.__dict__ for t in tranches], indent=2))
+
+
+@odds_app.command("v2-tranche-run")
+def v2_tranche_run_cmd(
+    name: Annotated[str, typer.Option(help="Stage with a tranche plan.")],
+    tranche: Annotated[int, typer.Option(help="Tranche number to run.")],
+    execute: Annotated[bool, typer.Option(help="Make the paid calls (default: dry run).")] = False,
+    approve_paid_calls: Annotated[
+        bool, typer.Option(help="Owner approval for the paid calls of THIS tranche only.")
+    ] = False,
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: run one tranche; later tranches need a passing offline gate of the previous one."""
+    stage = _stage_dir(data_root, name)
+    client = None
+    if execute:
+        if not approve_paid_calls:
+            typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
+            raise typer.Exit(code=2)
+        plan = {t.number: t for t in read_tranche_plan(stage)}
+        if tranche not in plan:
+            typer.echo(f"no tranche {tranche}", err=True)
+            raise typer.Exit(code=1)
+        config = _api_config(config_dir, plan[tranche].max_credits).model_copy(
+            update={"max_retries": 0}
+        )
+        client = TheOddsApiClient(config)
+    try:
+        report = run_tranche(
+            stage, tranche, store=_store(data_root, "historical"), client=client, execute=execute
+        )
+    except (StageRunStoppedError, OddsApiError, V2IntegrationError) as exc:
+        typer.echo(f"STOPPED: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps({"execute": execute, "tranche": tranche, "rows": report}, indent=2))
+
+
+@odds_app.command("v2-tranche-check")
+def v2_tranche_check_cmd(
+    edition: Annotated[str, typer.Option(help="Edition id from the draft v2 calendar.")],
+    name: Annotated[str, typer.Option(help="Stage with a tranche plan.")],
+    tranche: Annotated[int, typer.Option(help="Tranche number to gate.")],
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: offline gate for one tranche (run build-tables and link first; write-once)."""
+    report = _v2_report(edition, name, config_dir, data_root)
+    try:
+        gate = check_tranche(
+            _stage_dir(data_root, name),
+            tranche,
+            calendar=load_calendar()[edition],
+            audit_report=report,
+        )
+    except V2IntegrationError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(gate, indent=2, default=str))
+    if gate["status"] != "pass":
+        raise typer.Exit(code=1)

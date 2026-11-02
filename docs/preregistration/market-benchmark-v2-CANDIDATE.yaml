@@ -1,0 +1,86 @@
+# CANDIDATE PROTOCOL — NOT FROZEN, NOT ACTIVE. Do not cite as pre-registered.
+# Freezing requires explicit owner approval. At that point this content is copied to
+# configs/preregistration/market_benchmark_v2.yaml with status FROZEN, a frozen_on date and its
+# SHA-256 recorded in docs/DECISIONS.md, before any outcome is accessed. market-benchmark-v1 stays
+# frozen and is never edited.
+protocol_id: market-benchmark-v2
+status: CANDIDATE_NOT_FROZEN
+frozen_on: null
+purpose: >-
+  Probability-quality comparison of the frozen Phase 2 models against de-vigged bookmaker
+  probabilities observed at the start of each match day (10:00 tournament-local), on identical
+  ATP Grand Slam main-draw matches. Not a trading or profitability test.
+
+estimand: start_of_match_day_market   # differs from v1 (about 60 min before each match)
+
+population:
+  provider: the_odds_api
+  editions: [ao-2021, ao-2022, rg-2020, rg-2021, rg-2022, wim-2021, wim-2022, uso-2020, uso-2021, uso-2022]
+  calendar_file: src/quantedge/reference/v2_draft_edition_calendar.csv
+  calendar_sha256: SET_AT_FREEZE        # after owner verification of every calendar field
+  canonical_draw_category: tour_main
+  require_gate0_eval_eligible: true     # applied at confirmatory time only
+  design_exposed_editions: [wim-2022, uso-2022]   # reported with and without
+
+timing:
+  decision_local_time: "10:00"
+  time_zones:
+    tennis_atp_aus_open_singles: Australia/Melbourne
+    tennis_atp_french_open: Europe/Paris
+    tennis_atp_wimbledon: Europe/London
+    tennis_atp_us_open: America/New_York
+  snapshot_window_minutes: 10            # admissible iff T_d - 10 min < snapshot <= T_d
+  min_listed_lead_minutes: 60            # as listed in the decision snapshot; else short_lead
+  first_qualification_only: true
+  validity_censoring: started_by_any_later_snapshot_excludes
+  later_revisions_move_decision: false
+
+identity:
+  link_statuses_claimable: [linked, duplicate_provider_event]
+  claimants: all_listed_in_decision_snapshot
+  concurrent_claimants_at_first_decision: exclude_permanently
+  merge_or_choose: never
+
+market:
+  region: eu
+  market: match_winner
+  exchange_lay_prices: excluded
+  freshness_primary_minutes: 30
+  freshness_sensitivity_minutes: [15, 60]
+  missing_source_time: reject
+  distinct_source_rule: identical_price_pair_same_observation_counts_once
+  primary_reference_bookmaker: pinnacle
+  primary_adequacy_min_availability: 0.80
+  fallback_rule: highest_availability_outcome_blind_clones_collapsed
+  consensus_min_distinct_sources: 2
+  devig_primary: proportional
+  devig_secondary: [power, shin]
+
+acquisition:
+  one_request_per_calendar_day: true    # rest and expected-empty days included
+  planned_requests: 143
+  credits_per_request: 10
+  base_credits: 1430
+  contingency_credits: 143              # separate owner approval; never used automatically
+  max_credits_per_manifest: 130
+  max_retries: 0
+  quota_reconciliation: per_call
+  rescue_or_retime: never
+  lock: write_once_per_stage_before_confirmatory_run
+  feasibility:
+    edition: uso-2021
+    days: [2021-08-30, 2021-08-31, 2021-09-01, 2021-09-02, 2021-09-03, 2021-09-04, 2021-09-05]
+    tranches:
+      - {requests: 2, max_credits: 20}
+      - {requests: 5, max_credits: 50, requires_passing_gate_of: 1, separate_approval: true}
+
+metrics:                               # unchanged from v1; computed only in the confirmatory run
+  primary: [paired_log_loss_difference, paired_brier_difference]
+  bootstrap_block: iso_week_of_tournament_start
+  bootstrap_replicates: 2000
+  confidence_level: 0.95
+
+conduct:
+  max_confirmatory_runs: 1
+  timing_rule_revised_after_outcomes: never
+  late_check_and_holdout: untouched
