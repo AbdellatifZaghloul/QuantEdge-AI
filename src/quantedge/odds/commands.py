@@ -29,7 +29,7 @@ from quantedge.odds.preregistration import load_protocol
 from quantedge.odds.schemas import validate_odds_table
 from quantedge.odds.selector import SelectorConfig, decisions_from_schedule, select_quotes
 from quantedge.odds.store import CaptureStore, Stream
-from quantedge.odds.tables import build_odds_tables
+from quantedge.odds.tables import build_odds_tables_with_quarantine
 from quantedge.odds.theoddsapi import (
     PROVIDER,
     OddsApiConfig,
@@ -166,12 +166,16 @@ def build_tables_cmd(
     data_root: DataRoot = Path("data"),
 ) -> None:
     """Normalise a capture store into odds_events / odds_quotes Parquet (store is untouched)."""
-    events, quotes = build_odds_tables(_store(data_root, stream), TheOddsApiNormalizer())  # type: ignore[arg-type]
-    out = data_root / "processed" / "odds" / PROVIDER / stream
+    result = build_odds_tables_with_quarantine(_store(data_root, stream), TheOddsApiNormalizer())  # type: ignore[arg-type]
+    out = data_root / "processed" / "odds" / PROVIDER / stream  # gitignored (licensed data)
     out.mkdir(parents=True, exist_ok=True)
-    events.write_parquet(out / "odds_events.parquet")
-    quotes.write_parquet(out / "odds_quotes.parquet")
-    typer.echo(json.dumps({"events": events.height, "quotes": quotes.height, "out": str(out)}))
+    result.events.write_parquet(out / "odds_events.parquet")
+    result.quotes.write_parquet(out / "odds_quotes.parquet")
+    result.quarantine.write_parquet(out / "odds_quote_quarantine.parquet")
+    (out / "build_counts.json").write_text(
+        json.dumps(result.counts, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
+    typer.echo(json.dumps({**result.counts, "out": str(out)}))
 
 
 @odds_app.command("link")

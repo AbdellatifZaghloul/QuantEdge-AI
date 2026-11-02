@@ -19,6 +19,7 @@ sent, and historical requests additionally require explicit approval.
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import time
@@ -92,6 +93,27 @@ def parse_utc(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         raise ValueError(f"timestamp without timezone: {value!r}")
     return parsed.astimezone(UTC)
+
+
+def parse_decimal_price(outcome: dict[str, Any]) -> tuple[float, str, str | None]:
+    """Strictly parse a decimal price: ``(value, raw, issue)``; never coerces or repairs.
+
+    ``issue`` is ``None`` for a valid price (finite and > 1.0); otherwise a quarantine reason:
+    ``price_missing``, ``price_not_numeric`` (strings, booleans, objects), ``price_non_finite``
+    (NaN / infinity), or ``price_not_above_one`` (<= 1.0 cannot be a winning back price).
+    """
+    if "price" not in outcome or outcome["price"] is None:
+        return math.nan, json.dumps(outcome.get("price")), "price_missing"
+    value = outcome["price"]
+    raw = json.dumps(value, allow_nan=True)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return math.nan, raw, "price_not_numeric"
+    price = float(value)
+    if not math.isfinite(price):
+        return price, raw, "price_non_finite"
+    if price <= 1.0:
+        return price, raw, "price_not_above_one"
+    return price, raw, None
 
 
 def _redact(text: str, secret: str | None) -> str:
@@ -294,6 +316,7 @@ class TheOddsApiNormalizer:
                             else "other"
                         )
                         point = outcome.get("point")
+                        price, price_raw, price_issue = parse_decimal_price(outcome)
                         quotes.append(
                             NormalizedQuote(
                                 provider_event_id=str(event["id"]),
@@ -305,9 +328,11 @@ class TheOddsApiNormalizer:
                                 selection_name=name,
                                 selection_role=role,
                                 line=None if point is None else float(point),
-                                decimal_odds=float(outcome["price"]),
+                                decimal_odds=price,
                                 commence_time_utc=commence,
                                 market_last_update_utc=parse_utc(market.get("last_update")),
+                                price_raw=price_raw,
+                                price_issue=price_issue,
                             )
                         )
         return NormalizedSnapshot(

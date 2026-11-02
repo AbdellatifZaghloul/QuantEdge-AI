@@ -49,6 +49,13 @@ QUALITY_FLAGS = (
     "unknown_market",
     "snapshot_after_request",  # historical snapshot stamped later than the time requested
     "source_time_missing",  # no market-level source timestamp (age unknown)
+    "market_incomplete_after_quarantine",  # a sibling selection of this market was quarantined
+)
+QUARANTINE_REASONS = (
+    "price_missing",
+    "price_not_numeric",
+    "price_non_finite",
+    "price_not_above_one",
 )
 
 
@@ -99,6 +106,29 @@ ODDS_TABLES: dict[str, tuple[Col, ...]] = {
         Col("timing_class", pl.String(), checks=_isin(TIMING_CLASSES)),
         Col("quality_flags", pl.String()),
         Col("price_semantics", pl.String(), checks=_isin((PRICE_SEMANTICS,))),
+        Col("licence_class", pl.String()),
+        Col("snapshot_sha256", pl.String()),
+    ),
+    # Structurally invalid observations, kept for audit outside the canonical quotes table.
+    "odds_quote_quarantine": (
+        Col("quote_id", pl.String(), unique=True, checks=_regex(QUOTE_ID)),
+        Col("reason_code", pl.String(), checks=_isin(QUARANTINE_REASONS)),
+        Col("event_id", pl.String(), checks=_regex(EVENT_ID)),
+        Col("provider", pl.String()),
+        Col("bookmaker_key", pl.String()),
+        Col("region", pl.String(), nullable=True),
+        Col("market", pl.String(), checks=_isin(MARKETS)),
+        Col("provider_market_key", pl.String()),
+        Col("selection_name", pl.String()),
+        Col("line", pl.Float64(), nullable=True),
+        Col("price_raw", pl.String()),
+        Col("decimal_odds", pl.Float64(), nullable=True),
+        Col("commence_time_utc", UTC_DT),
+        Col("market_last_update_utc", UTC_DT, nullable=True),
+        Col("observed_at_utc", UTC_DT),
+        Col("captured_at_utc", UTC_DT),
+        Col("capture_mode", pl.String(), checks=_isin(CAPTURE_MODES)),
+        Col("stream", pl.String(), checks=_isin(STREAMS)),
         Col("licence_class", pl.String()),
         Col("snapshot_sha256", pl.String()),
     ),

@@ -64,9 +64,11 @@ class NormalizedQuote:
     selection_name: str
     selection_role: str
     line: float | None
-    decimal_odds: float
+    decimal_odds: float  # NaN when the provider value is missing or not a number
     commence_time_utc: datetime
     market_last_update_utc: datetime | None
+    price_raw: str | None = None  # the provider's value exactly as received (JSON-encoded)
+    price_issue: str | None = None  # quarantine reason for a structurally invalid price, else None
 
 
 @dataclass(frozen=True)

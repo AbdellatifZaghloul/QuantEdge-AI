@@ -1,8 +1,17 @@
-"""Build canonical ``odds_events`` and ``odds_quotes`` tables from a capture store."""
+"""Build canonical ``odds_events`` and ``odds_quotes`` tables from a capture store.
+
+Structurally invalid prices (missing, non-numeric, non-finite, or <= 1.0) never enter
+``odds_quotes`` and are never repaired: they go to a separate ``odds_quote_quarantine`` table with a
+reason code and full provenance. Valid sibling selections of an affected market stay in
+``odds_quotes`` but carry ``market_incomplete_after_quarantine``; the selector then finds only one
+selection for that (bookmaker, observation) and reports ``incomplete_market``, so no probability can
+be formed from a half market. The raw capture store is only read, never modified.
+"""
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -46,12 +55,28 @@ def _flags(
     return ",".join(flags)
 
 
+@dataclass(frozen=True)
+class OddsBuild:
+    events: pl.DataFrame
+    quotes: pl.DataFrame
+    quarantine: pl.DataFrame
+    counts: dict[str, Any] = field(default_factory=dict)
+
+
 def build_odds_tables(
     store: CaptureStore, provider: OddsProvider
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Valid canonical events and quotes (see ``build_odds_tables_with_quarantine``)."""
+    result = build_odds_tables_with_quarantine(store, provider)
+    return result.events, result.quotes
+
+
+def build_odds_tables_with_quarantine(store: CaptureStore, provider: OddsProvider) -> OddsBuild:
     """Deterministic normalisation of every verified capture (re-runnable; store is untouched)."""
     licence = str(provider.licence_class)
     quote_rows: dict[str, dict[str, Any]] = {}
+    quarantine_rows: dict[str, dict[str, Any]] = {}
+    raw_quotes = 0
     seen: dict[str, dict[str, Any]] = {}
     commence_versions: dict[str, set[datetime]] = defaultdict(set)
     for record, capture in store.iter_captures():
@@ -86,7 +111,11 @@ def build_odds_tables(
             else:
                 row["first_observed_utc"] = min(row["first_observed_utc"], snapshot.observed_at_utc)
         for q in snapshot.quotes:
+            raw_quotes += 1
             eid = event_id(provider.name, q.provider_event_id)
+            # Valid quotes keep their historical ID (repr of the float price); invalid ones are
+            # keyed on the provider's raw value so non-numeric inputs stay distinct and auditable.
+            price_key = repr(q.decimal_odds) if q.price_issue is None else f"raw:{q.price_raw}"
             qid = quote_id(
                 provider.name,
                 q.provider_event_id,
@@ -94,10 +123,34 @@ def build_odds_tables(
                 q.provider_market_key,
                 q.selection_name,
                 "" if q.line is None else repr(q.line),
-                repr(q.decimal_odds),
+                price_key,
                 "" if q.market_last_update_utc is None else q.market_last_update_utc.isoformat(),
                 snapshot.observed_at_utc.isoformat(),
             )
+            if q.price_issue is not None:
+                quarantine_rows[qid] = {
+                    "quote_id": qid,
+                    "reason_code": q.price_issue,
+                    "event_id": eid,
+                    "provider": provider.name,
+                    "bookmaker_key": q.bookmaker_key,
+                    "region": q.region,
+                    "market": q.market,
+                    "provider_market_key": q.provider_market_key,
+                    "selection_name": q.selection_name,
+                    "line": q.line,
+                    "price_raw": q.price_raw if q.price_raw is not None else "null",
+                    "decimal_odds": q.decimal_odds,
+                    "commence_time_utc": q.commence_time_utc,
+                    "market_last_update_utc": q.market_last_update_utc,
+                    "observed_at_utc": snapshot.observed_at_utc,
+                    "captured_at_utc": snapshot.captured_at_utc,
+                    "capture_mode": snapshot.capture_mode,
+                    "stream": store.stream,
+                    "licence_class": licence,
+                    "snapshot_sha256": record.sha256,
+                }
+                continue
             quote_rows[qid] = {
                 "quote_id": qid,
                 "event_id": eid,
@@ -138,9 +191,56 @@ def build_odds_tables(
         if seen
         else empty_table("odds_events")
     ).sort("event_id")
-    quotes = pl.DataFrame(list(quote_rows.values())) if quote_rows else None
-    if quotes is None:
-        return events, empty_table("odds_quotes")
+    quarantine = (
+        validate_odds_table("odds_quote_quarantine", pl.DataFrame(list(quarantine_rows.values())))
+        if quarantine_rows
+        else empty_table("odds_quote_quarantine")
+    ).sort("quote_id")
+    counts: dict[str, Any] = {
+        "raw_quotes": raw_quotes,
+        "distinct_quotes": len(quote_rows) + len(quarantine_rows),
+        "valid_quotes": len(quote_rows),
+        "quarantined_quotes": len(quarantine_rows),
+        "quarantined_by_reason": dict(
+            sorted(Counter(r["reason_code"] for r in quarantine_rows.values()).items())
+        ),
+        "events": events.height,
+    }
+    if not quote_rows:
+        return OddsBuild(
+            events,
+            empty_table("odds_quotes"),
+            quarantine,
+            counts | {"incomplete_sibling_quotes": 0},
+        )
+    quotes = pl.DataFrame(list(quote_rows.values()))
+    # Flag surviving siblings of quarantined selections (same market observation, same |line|).
+    market_keys = [
+        "event_id",
+        "bookmaker_key",
+        "provider_market_key",
+        "observed_at_utc",
+        "_abs_line",
+    ]
+    affected = (
+        quarantine.with_columns(pl.col("line").cast(pl.Float64).abs().alias("_abs_line"))
+        .select(market_keys)
+        .unique()
+    )
+    quotes = quotes.with_columns(pl.col("line").cast(pl.Float64).abs().alias("_abs_line"))
+    hit = quotes.join(affected, on=market_keys, how="semi", nulls_equal=True)["quote_id"]
+    quotes = quotes.with_columns(
+        pl.when(pl.col("quote_id").is_in(hit.to_list()))
+        .then(
+            pl.concat_str(
+                [pl.col("quality_flags"), pl.lit("market_incomplete_after_quarantine")],
+                separator=",",
+            ).str.strip_chars(",")
+        )
+        .otherwise(pl.col("quality_flags"))
+        .alias("quality_flags")
+    ).drop("_abs_line")
+    counts["incomplete_sibling_quotes"] = hit.len()
     changed = events.filter(pl.col("commence_time_versions") > 1)["event_id"]
     quotes = quotes.with_columns(
         pl.when(pl.col("event_id").is_in(changed.to_list()))
@@ -152,4 +252,6 @@ def build_odds_tables(
         .otherwise(pl.col("quality_flags"))
         .alias("quality_flags")
     )
-    return events, validate_odds_table("odds_quotes", quotes).sort("quote_id")
+    return OddsBuild(
+        events, validate_odds_table("odds_quotes", quotes).sort("quote_id"), quarantine, counts
+    )
