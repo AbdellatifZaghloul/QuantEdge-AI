@@ -190,17 +190,24 @@ def test_pilot_end_to_end_on_synthetic_data() -> None:
     # Pinnacle covers 3/4 = 75% < 80% pre-registered adequacy -> outcome-blind fallback.
     assert report["reference"] == {"bookmaker": "bookb", "rule": "fallback_highest_availability"}
     assert report["protocol_sha256"] == sha
-    primary = report["primary"]
-    assert primary["n_common"] == 4 and set(primary["metrics"]) == {
+    contrasts = report["contrasts"]
+    assert {k: v["n_scored"] for k, v in contrasts.items()} == {
+        "elo-market_primary": 4,
+        "rank-market_primary": 4,
+        "elo-market_consensus": 4,
+    }
+    assert contrasts["elo-market_primary"]["brier_diff"] is not None
+    common = report["supplementary_common_population"]
+    assert common["n_common"] == 4 and set(common["metrics"]) == {
         "market_primary",
         "elo",
         "rank",
         "market_consensus",
     }
-    assert "brier_diff::elo-market_primary" in primary["bootstrap_95"]
     assert set(report["sensitivity_staleness"]) == {"15", "60"}
     # Quotes are 70 minutes before start = 10 minutes before the decision: fresh at 15 and 60.
-    assert report["sensitivity_staleness"]["15"]["n_common"] == 4
+    assert report["sensitivity_staleness"]["15"]["elo-market_primary"]["n_scored"] == 4
+    assert set(report["sensitivity_devig"]) == {"power", "shin"}
     assert report["quote_age_minutes_reference"][0.5] == pytest.approx(10.0)
 
 

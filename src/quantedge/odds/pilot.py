@@ -8,7 +8,9 @@ Order of operations (outcome-blind until step 6):
 3. decisions at earliest provider start minus the pre-registered lead;
 4. strict point-in-time selection at the primary staleness limit;
 5. bookmaker availability and the outcome-blind reference choice;
-6. join outcomes and score every pre-registered contrast on the identical population.
+6. join outcomes and score every pre-registered contrast on its own pairwise identical population
+   (rows where both of that contrast's columns exist); a four-column common population is reported
+   separately as a supplementary view.
 """
 
 from __future__ import annotations
@@ -160,25 +162,63 @@ def run_pilot(
     )
     assert_within_window(base, protocol, holdout_start=holdout_start)
 
-    def score(selection: pl.DataFrame, columns: list[str]) -> dict[str, Any]:
+    market_columns = ["market_primary", "market_consensus"]
+
+    def frame_for(selection: pl.DataFrame, columns: list[str] | None = None) -> pl.DataFrame:
         market = _market_columns(selection, linked, protocol, reference)
         frame = base.join(market, on="match_key", how="left")
-        return compare_on_identical_population(
+        missing = [c for c in [*market_columns, *(columns or [])] if c not in frame.columns]
+        return frame.with_columns([pl.lit(None, dtype=pl.Float64).alias(c) for c in missing])
+
+    def pairwise(frame: pl.DataFrame, model_col: str, ref_col: str) -> dict[str, Any]:
+        """One contrast on exactly the rows where *both* of its columns exist."""
+        miss_model = frame[model_col].is_null()
+        miss_ref = frame[ref_col].is_null()
+        result = compare_on_identical_population(
             frame,
-            columns,
+            [ref_col, model_col],
             holdout_start=holdout_start,
             replicates=protocol.metrics.bootstrap_replicates,
             seed=protocol.metrics.bootstrap_seed,
         )
+        boot = result.get("bootstrap_95", {})
+        metrics = result["metrics"]
+        return {
+            "model": model_col,
+            "reference": ref_col,
+            "n_population": frame.height,
+            "n_scored": result["n_common"],
+            "excluded_missing_model": int((miss_model & ~miss_ref).sum()),
+            "excluded_missing_reference": int((miss_ref & ~miss_model).sum()),
+            "excluded_missing_both": int((miss_model & miss_ref).sum()),
+            "metrics": {"model": metrics[model_col], "reference": metrics[ref_col]}
+            if metrics
+            else {},
+            "log_loss_diff": boot.get(f"log_loss_diff::{model_col}-{ref_col}"),
+            "brier_diff": boot.get(f"brier_diff::{model_col}-{ref_col}"),
+        }
 
-    primary_columns = ["market_primary", "elo", "rank", "market_consensus"]
-    main = score(primary_sel, primary_columns)
+    def contrasts(frame: pl.DataFrame) -> dict[str, dict[str, Any]]:
+        return {f"{m}-{r}": pairwise(frame, m, r) for m, r in protocol.metrics.contrasts}
+
+    primary_frame = frame_for(primary_sel)
+    main = contrasts(primary_frame)
+    common = compare_on_identical_population(
+        primary_frame,
+        ["market_primary", "elo", "rank", "market_consensus"],
+        holdout_start=holdout_start,
+        replicates=protocol.metrics.bootstrap_replicates,
+        seed=protocol.metrics.bootstrap_seed,
+    )
     sensitivity_staleness = {
-        f"{s:g}": score(select(s), primary_columns)
-        for s in timing.sensitivity_max_staleness_minutes
+        f"{s:g}": contrasts(frame_for(select(s))) for s in timing.sensitivity_max_staleness_minutes
     }
-    devig_columns = [f"market_primary_{m}" for m in protocol.market.devig_secondary]
-    sensitivity_devig = score(primary_sel, ["market_primary", "elo", *devig_columns])
+    devig_cols = [f"market_primary_{m}" for m in protocol.market.devig_secondary]
+    devig_frame = frame_for(primary_sel, devig_cols)
+    sensitivity_devig = {
+        m: pairwise(devig_frame, "elo", f"market_primary_{m}")
+        for m in protocol.market.devig_secondary
+    }
 
     ref_rows = primary_sel.filter(
         (pl.col("bookmaker_key") == reference) & pl.col("status").is_in(["available", "stale"])
@@ -194,7 +234,7 @@ def run_pilot(
             "population": population.height,
             "linked_events": linked.height,
             "population_without_linked_event": population.height - linked["match_key"].n_unique(),
-            "scored_identical_population": main["n_common"],
+            "scored_per_contrast": {k: v["n_scored"] for k, v in main.items()},
         },
         "link_status_counts": links.group_by("status").len().sort("status").to_dicts(),
         "selection_status_counts": primary_sel.group_by("status").len().sort("status").to_dicts(),
@@ -202,7 +242,12 @@ def run_pilot(
         "quote_age_minutes_reference": {q: float(np.quantile(ages, q)) for q in (0.1, 0.5, 0.9)}
         if ages.size
         else {},
-        "primary": main,
+        "contrasts": main,
+        "supplementary_common_population": {
+            "label": "SUPPLEMENTARY, not pre-registered as primary: all four columns jointly "
+            "present; for interpretability only",
+            **common,
+        },
         "sensitivity_staleness": sensitivity_staleness,
         "sensitivity_devig": sensitivity_devig,
     }
