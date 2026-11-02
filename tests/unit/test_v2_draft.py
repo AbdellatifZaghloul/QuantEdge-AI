@@ -760,15 +760,31 @@ def test_partial_acquisition_audit_lists_pending_days(tmp_path: Path) -> None:
     assert report["denominators"]["fresh30_ge2_distinct_matches"] == 1
 
 
-def test_calendar_evidence_is_recorded_and_nothing_is_marked_verified() -> None:
-    for cal in load_calendar().values():
-        ev = dict(cal.evidence)
-        assert ev["dates_evidence"].startswith("secondary (Wikipedia)")
-        assert "https://en.wikipedia.org/wiki/" in ev["dates_evidence"]
-        assert cal.verified is False  # official verification of every field is still pending
-    wim = load_calendar()
-    assert "Middle Sunday" in dict(wim["wim-2021"].evidence)["rest_days_evidence"]
-    assert wim["wim-2022"].rest_days == ()
+def test_calendar_date_evidence_is_organizer_level_and_nothing_fully_verified() -> None:
+    cal = load_calendar()
+    levels = {e: c.dates_verified for e, c in cal.items()}
+    assert levels.pop("wim-2022") == "organizer_derived"  # dates derived, not stated verbatim
+    assert set(levels.values()) == {"organizer"}
+    for c in cal.values():
+        ev = dict(c.evidence)
+        assert "https://" in ev["dates_evidence"]
+        assert c.verified is False  # complete-calendar verification still pending
+        assert "assumption" in ev["empty_days_evidence"]  # reporting-only waiver, labelled
+    assert "Middle Sunday" in dict(cal["wim-2021"].evidence)["rest_days_evidence"]
+    assert cal["wim-2021"].rest_days == (date(2021, 7, 4),) and cal["wim-2022"].rest_days == ()
+    # Dates were confirmed, not changed: the planned calendar is identical.
+    assert {e: (c.first_day.isoformat(), c.last_day.isoformat()) for e, c in cal.items()} == {
+        "ao-2021": ("2021-02-08", "2021-02-21"),
+        "ao-2022": ("2022-01-17", "2022-01-30"),
+        "rg-2020": ("2020-09-27", "2020-10-11"),
+        "rg-2021": ("2021-05-30", "2021-06-13"),
+        "rg-2022": ("2022-05-22", "2022-06-05"),
+        "wim-2021": ("2021-06-28", "2021-07-11"),
+        "wim-2022": ("2022-06-27", "2022-07-10"),
+        "uso-2020": ("2020-08-31", "2020-09-13"),
+        "uso-2021": ("2021-08-30", "2021-09-12"),
+        "uso-2022": ("2022-08-29", "2022-09-11"),
+    }
 
 
 # --------------------------------------------------------------------- candidate protocol
@@ -795,6 +811,11 @@ def test_candidate_protocol_is_not_frozen_and_matches_the_code() -> None:
     assert acq["planned_requests"] == days == 143
     assert acq["base_credits"] == days * acq["credits_per_request"] == 1430
     assert acq["contingency_credits"] == 143
+    assert acq["programme_ceiling_credits"] == 1430 and acq["feasibility_included_in_base"] is True
+    ver = cand["population"]["calendar_verification"]
+    assert ver["complete_calendar_verified"] is False
+    assert ver["rest_days"] == ver["expected_empty_days"] == "reporting_only_waiver"
+    assert all(c.dates_verified in {"organizer", "organizer_derived"} for c in cal.values())
     feas = acq["feasibility"]
     assert [str(d) for d in feas["days"]] == [
         d.isoformat() for d in cal["uso-2021"].planned_days()[:7]

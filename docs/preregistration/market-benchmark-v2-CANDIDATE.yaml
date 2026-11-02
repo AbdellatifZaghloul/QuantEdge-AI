@@ -17,7 +17,12 @@ population:
   provider: the_odds_api
   editions: [ao-2021, ao-2022, rg-2020, rg-2021, rg-2022, wim-2021, wim-2022, uso-2020, uso-2021, uso-2022]
   calendar_file: src/quantedge/reference/v2_draft_edition_calendar.csv
-  calendar_sha256: SET_AT_FREEZE        # after owner verification of every calendar field
+  calendar_sha256: SET_AT_FREEZE        # SHA-256 of calendar_file at freeze
+  calendar_verification:
+    first_and_last_days: organizer_required   # 9 editions organizer-stated, wim-2022 organizer-derived
+    rest_days: reporting_only_waiver           # every calendar day is requested; labels only
+    expected_empty_days: reporting_only_waiver # every calendar day is requested; labels only
+    complete_calendar_verified: false          # no edition has every field officially sourced
   canonical_draw_category: tour_main
   require_gate0_eval_eligible: true     # applied at confirmatory time only
   design_exposed_editions: [wim-2022, uso-2022]   # reported with and without
@@ -61,7 +66,9 @@ acquisition:
   planned_requests: 143
   credits_per_request: 10
   base_credits: 1430
-  contingency_credits: 143              # separate owner approval; never used automatically
+  programme_ceiling_credits: 1430       # recommended ceiling for the whole programme
+  contingency_credits: 143              # separate future owner approval; never used automatically
+  feasibility_included_in_base: true    # the 70 feasibility credits are part of the 1,430
   max_credits_per_manifest: 130
   max_retries: 0
   quota_reconciliation: per_call

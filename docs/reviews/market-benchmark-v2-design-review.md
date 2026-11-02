@@ -423,3 +423,19 @@ no odds-provider calls and no credits.
   - Request times are unchanged.
 - **Partial audit:** `v2-audit` audits only the requested days and lists the rest as pending. No complete edition or
   lock is required.
+
+## 14. Organizer evidence incorporated (2026-11-03)
+
+Details and exact quotations are in `docs/preregistration/market-benchmark-v2-freeze-checklist.md` §1–§3.
+
+- **First and last main-draw days:** **9 / 10** organizer-stated; Wimbledon 2022 organizer-derived (Middle Sunday
+  3 July plus the 14-day format from 2022); none changed.
+- **Unretrievable reviewer links:** `ausopen.com/tickets-ao22` (HTTP 403) and the three JavaScript-rendered usopen.org
+  articles. Other organizer pages (ausopen.com, usta.com, a usopen.org PDF) were used instead and cited.
+- **Rest days:** Wimbledon 2021 and 2022 supported (organizer).
+- **Assumptions under the reporting-only waiver:** rest days for the other editions, and every expected empty day.
+- **Start of play:** primary for RG 2020–2022 and Wimbledon 2021–2022; tour-official for US Open 2020. It is still
+  not established for every day. The 10:00 local anchor and 60-minute minimum listed lead are unchanged.
+- **Budget:** programme ceiling 1,430 (feasibility 70 included); contingency 143 only by separate approval.
+- **Unchanged and re-verified:** the two-tranche implementation and its files.
+- **Disclosure:** one search snippet incidentally showed a single 2022 Wimbledon match result; it was not used.

@@ -66,6 +66,9 @@ DECISION_LOCAL_TIME = time(10, 0)
 MIN_LEAD = timedelta(minutes=60)
 SNAPSHOT_TOLERANCE = timedelta(minutes=10)  # admissible: T_d - 10 min < snapshot <= T_d
 CLAIMABLE = ("linked", "duplicate_provider_event")
+# First/last-day evidence grades. Rest-day and expected-empty columns are reporting labels only
+# (every calendar day is requested), covered by a documentary waiver until officially sourced.
+DATE_VERIFICATION_LEVELS = ("organizer", "organizer_derived", "none")
 UTC_DT = pl.Datetime("us", "UTC")
 LISTING_SCHEMA = pl.Schema(
     {
@@ -107,8 +110,9 @@ class EditionCalendar:
     rest_days: tuple[date, ...]
     expected_empty_days: tuple[date, ...]
     source: str
-    verified: bool  # true only when every field is confirmed from official sources
+    verified: bool  # complete-calendar verification: every field confirmed from official sources
     evidence: tuple[tuple[str, str], ...] = ()  # (field, evidence and source) as recorded
+    dates_verified: str = "none"  # first/last day: organizer | organizer_derived | none
 
     def planned_days(self) -> tuple[date, ...]:
         """Every calendar day is requested, rest days included: the acquisition calendar never
@@ -153,6 +157,7 @@ def load_calendar() -> dict[str, EditionCalendar]:
             expected_empty_days=_dates(r["expected_empty_days"]),
             source=r["calendar_source"],
             verified=r["verified"].strip().lower() == "true",
+            dates_verified=r.get("dates_verified") or "none",
             evidence=tuple(
                 (k, f"{r[k]} {r.get(k.replace('_evidence', '_source'), '')}".strip())
                 for k in (
@@ -166,6 +171,10 @@ def load_calendar() -> dict[str, EditionCalendar]:
         )
         if cal.edition_id in out:
             raise V2IntegrationError(f"duplicate edition {cal.edition_id}")
+        if cal.dates_verified not in DATE_VERIFICATION_LEVELS:
+            raise V2IntegrationError(f"{cal.edition_id}: unknown dates_verified level")
+        if cal.verified and cal.dates_verified != "organizer":
+            raise V2IntegrationError(f"{cal.edition_id}: fully verified needs organizer dates")
         if TOURNAMENT_TZ.get(cal.sport_key) != cal.time_zone:
             raise V2IntegrationError(f"{cal.edition_id}: time zone does not match the sport")
         if not cal.first_day <= cal.last_day or (cal.last_day - cal.first_day).days > 15:
