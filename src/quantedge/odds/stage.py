@@ -40,6 +40,15 @@ from quantedge.odds.theoddsapi import TheOddsApiClient, cost_historical_odds, pa
 ABSOLUTE_STAGE_CEILING = 130
 
 
+# Internal scheduling controls of day-anchored manifests (DRAFT v2). A sentinel carries the
+# decision instant of a request; it is never a provider event and never counts as availability.
+SENTINEL_PREFIX = "__day_anchor__"
+
+
+def is_sentinel(provider_event_id: str) -> bool:
+    return provider_event_id.startswith(SENTINEL_PREFIX)
+
+
 class StagePlanError(ValueError):
     """A plan would violate its timing or budget constraints."""
 
@@ -81,6 +90,9 @@ class StageManifest:
     stage_ceiling: int
     planned_credits: int
     requests: tuple[PlannedRequest, ...]
+    # True: a returned snapshot must satisfy decision - gap < snapshot <= request (strict lower
+    # bound, DRAFT v2 day anchors). False (v1 stages): decision - snapshot <= gap is accepted.
+    strict_snapshot_window: bool = False
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True) + "\n"
@@ -172,6 +184,8 @@ def plan_stage(
         ),
         key=lambda e: (e.commence_time_utc, e.provider_event_id),
     )
+    if any(is_sentinel(e.provider_event_id) for e in pre_match):
+        raise StagePlanError("provider event id collides with the internal sentinel prefix")
     if len({e.provider_event_id for e in pre_match}) != len(pre_match):
         raise StagePlanError("duplicate provider event ids in the discovery snapshot")
     groups: list[tuple[datetime, datetime, list[PlannedEvent]]] = []
@@ -241,7 +255,7 @@ def manifest_summary(manifest: StageManifest) -> list[dict[str, Any]]:
                 "request_id": r.request_id,
                 "request_date_utc": r.request_date_utc,
                 "expected_snapshot_utc": r.expected_snapshot_utc,
-                "events": len(r.events),
+                "events": _real_events(r),
                 "discovered_later": sum(e.discovered_later for e in r.events),
                 "first_decision_utc": iso(min(decisions)),
                 "last_decision_utc": iso(max(decisions)),
@@ -326,6 +340,7 @@ def _verify_call(
     credits_header: bool,
     previous_remaining: int | None,
     gap: timedelta,
+    strict: bool = False,
 ) -> None:
     if not credits_header or entry.credits_charged != req.credits:
         raise StageRunStoppedError(
@@ -342,11 +357,19 @@ def _verify_call(
     returned = parse_utc(entry.returned_snapshot_utc)
     if returned is None or returned > _utc(req.request_date_utc):
         raise StageRunStoppedError(f"{req.request_id}: missing or post-request snapshot timestamp")
-    if any(_utc(e.decision_utc) - returned > gap for e in req.events):
+    ages = [_utc(e.decision_utc) - returned for e in req.events]
+    if any(age >= gap if strict else age > gap for age in ages):
         raise StageRunStoppedError(
             f"{req.request_id}: returned {iso(returned)} is older than planned "
             f"({req.expected_snapshot_utc}); grid assumption failed"
         )
+
+
+LOCK_FILE = "lock.json"
+
+
+def _real_events(req: PlannedRequest) -> int:
+    return sum(not is_sentinel(e.provider_event_id) for e in req.events)
 
 
 def run_stage(
@@ -370,6 +393,15 @@ def run_stage(
     """
     now = clock or (lambda: datetime.now(tz=UTC))
     ceiling = min(manifest.planned_credits, manifest.stage_ceiling, ABSOLUTE_STAGE_CEILING)
+    if (ledger_path.parent / LOCK_FILE).exists():
+        raise StageRunStoppedError(f"{manifest.name}: acquisition is locked; no further requests")
+    has_sentinels = any(
+        is_sentinel(e.provider_event_id) for r in manifest.requests for e in r.events
+    )
+    if has_sentinels and not manifest.strict_snapshot_window:
+        raise StageRunStoppedError(
+            "legacy day-anchor manifest without the strict window; rebuild it"
+        )
     ledger = read_ledger(ledger_path)
     spent = ledger[-1].cumulative_credits if ledger else 0
     remaining = ledger[-1].credits_remaining if ledger else last_known_quota(store)
@@ -384,7 +416,7 @@ def run_stage(
             "request_id": req.request_id,
             "request_date_utc": req.request_date_utc,
             "expected_snapshot_utc": req.expected_snapshot_utc,
-            "events": len(req.events),
+            "events": _real_events(req),
             "credits": req.credits,
         }
         if req.request_id in done or req.expected_snapshot_utc in stored:
@@ -418,8 +450,12 @@ def run_stage(
             credits_remaining=capture.credits_remaining,
             cumulative_credits=spent,
             capture_id=record.capture_id,
-            events_planned=len(req.events),
-            events_present=sum(e.provider_event_id in ids for e in req.events),
+            events_planned=_real_events(req),
+            events_present=sum(
+                e.provider_event_id in ids
+                for e in req.events
+                if not is_sentinel(e.provider_event_id)
+            ),
             recorded_at_utc=iso(now()),
         )
         _append_ledger(ledger_path, entry)
@@ -430,6 +466,7 @@ def run_stage(
             credits_header=capture.credits_last is not None,
             previous_remaining=remaining,
             gap=gap,
+            strict=manifest.strict_snapshot_window,
         )
         remaining = capture.credits_remaining
     return report
@@ -492,6 +529,8 @@ def stage_audit(
     - ``median_event_quote_age_minutes``: median over events of each event's median available
       age, so events with many bookmakers do not dominate; reported, not gating.
     """
+    if any(is_sentinel(e.provider_event_id) for r in manifest.requests for e in r.events):
+        raise StagePlanError("day-anchor (DRAFT v2) manifest: use the v2 audit, not stage_audit")
     planned = {e.provider_event_id: e for r in manifest.requests for e in r.events}
     ev = events.filter(
         (pl.col("competition_key") == manifest.sport_key)

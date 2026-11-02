@@ -92,3 +92,30 @@ def test_compare_without_linked_odds_fails_cleanly(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 1 and "no linked odds" in result.output
+
+
+def test_v2_manifest_is_offline_calendar_bound_and_write_once(tmp_path: Path) -> None:
+    args = [
+        "odds",
+        "v2-manifest",
+        "--edition",
+        "uso-2021",
+        "--name",
+        "feas",
+        "--data-root",
+        str(tmp_path),
+    ]
+    made = runner.invoke(app, [*args, "--days", "2021-08-30..2021-09-05"])
+    assert made.exit_code == 0, made.output
+    assert '"planned_credits": 70' in made.output and '"calendar_verified": false' in made.output
+    again = runner.invoke(app, [*args, "--days", "2021-08-30..2021-09-05"])
+    assert again.exit_code == 1 and "refusing to overwrite" in again.output
+    outside = runner.invoke(
+        app,
+        ["odds", "v2-manifest", "--edition", "uso-2021", "--name", "x", "--days", "2021-09-20",
+         "--data-root", str(tmp_path)],
+    )  # fmt: skip
+    assert outside.exit_code == 1 and "outside the frozen calendar" in outside.output
+    dry = runner.invoke(app, ["odds", "stage-run", "--name", "feas", "--data-root", str(tmp_path)])
+    assert dry.exit_code == 0 and dry.output.count("would_request") == 7
+    assert not (tmp_path / "processed/odds/the_odds_api/stages/feas/ledger.jsonl").exists()

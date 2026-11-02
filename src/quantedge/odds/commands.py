@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -29,6 +30,7 @@ from quantedge.odds.preregistration import load_protocol
 from quantedge.odds.schemas import validate_odds_table
 from quantedge.odds.selector import SelectorConfig, decisions_from_schedule, select_quotes
 from quantedge.odds.stage import (
+    LOCK_FILE,
     StageManifest,
     StagePlanError,
     StageRunStoppedError,
@@ -47,6 +49,15 @@ from quantedge.odds.theoddsapi import (
     OddsApiError,
     TheOddsApiClient,
     TheOddsApiNormalizer,
+)
+from quantedge.odds.v2_draft import (
+    V2IntegrationError,
+    day_anchor_manifest,
+    identity_links,
+    load_calendar,
+    schedule_listings,
+    v2_audit,
+    write_lock,
 )
 
 odds_app = typer.Typer(no_args_is_help=True, help="Odds infrastructure (Phase 3A).")
@@ -481,3 +492,103 @@ def stage_audit_cmd(
         links=pl.read_parquet(links_path) if links_path.exists() else None,
     )
     typer.echo(json.dumps(result, indent=2))
+
+
+# ------------------------------------------------------------------- DRAFT v2 (not frozen)
+
+
+def _parse_days(spec: str) -> list[date]:
+    """``YYYY-MM-DD..YYYY-MM-DD`` (inclusive) or a comma-separated list."""
+    if ".." in spec:
+        lo, hi = (date.fromisoformat(x) for x in spec.split(".."))
+        return [lo + timedelta(days=i) for i in range((hi - lo).days + 1)]
+    return [date.fromisoformat(x) for x in spec.split(",") if x]
+
+
+@odds_app.command("v2-manifest")
+def v2_manifest_cmd(
+    edition: Annotated[str, typer.Option(help="Edition id from the draft v2 calendar.")],
+    name: Annotated[str, typer.Option(help="Stage name for the manifest directory.")],
+    days: Annotated[str, typer.Option(help="Calendar days, e.g. 2021-08-30..2021-09-05.")],
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: write a fixed day-anchor manifest (offline; no network, no credits)."""
+    calendar = load_calendar()[edition]
+    try:
+        manifest = day_anchor_manifest(name=name, calendar=calendar, days=_parse_days(days))
+    except (StagePlanError, V2IntegrationError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    out = _stage_dir(data_root, name)
+    path = out / "manifest.json"
+    if path.exists():
+        typer.echo(f"refusing to overwrite {path}", err=True)
+        raise typer.Exit(code=1)
+    out.mkdir(parents=True, exist_ok=True)
+    path.write_text(manifest.to_json(), encoding="utf-8", newline="\n")
+    typer.echo(
+        json.dumps(
+            {
+                "manifest": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "edition": edition,
+                "calendar_verified": calendar.verified,
+                "requests": [r.request_date_utc for r in manifest.requests],
+                "planned_credits": manifest.planned_credits,
+            },
+            indent=2,
+        )
+    )
+
+
+@odds_app.command("v2-lock")
+def v2_lock_cmd(
+    name: Annotated[str, typer.Option(help="Stage name to lock (write-once).")],
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: lock a stage's acquisition; afterwards stage-run refuses any request for it."""
+    try:
+        lock = write_lock(_stage_dir(data_root, name), _store(data_root, "historical"))
+    except V2IntegrationError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(lock, indent=2))
+
+
+@odds_app.command("v2-audit")
+def v2_audit_cmd(
+    edition: Annotated[str, typer.Option(help="Edition id from the draft v2 calendar.")],
+    stages: Annotated[str, typer.Option(help="Comma-separated stage names of this edition.")],
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """DRAFT v2: outcome-blind coverage audit (offline; run build-tables and link first)."""
+    calendar = load_calendar()[edition]
+    manifests = []
+    for name in [s for s in stages.split(",") if s]:
+        stage = _stage_dir(data_root, name)
+        manifests.append(
+            (
+                StageManifest.from_json((stage / "manifest.json").read_text(encoding="utf-8")),
+                read_ledger(stage / "ledger.jsonl"),
+                (stage / LOCK_FILE).exists(),
+            )
+        )
+    out = data_root / "processed" / "odds" / PROVIDER / "historical"
+    events = pl.read_parquet(out / "odds_events.parquet")
+    tables = load_tables(resolve_build_dir(data_root / "processed"))
+    matches, _ = identity_view(tables, load_split_config(config_dir / "splits.yaml"))
+    identity_columns = [
+        "match_key", "tournament_id", "draw_category", "match_day_lo", "match_day_hi",
+        "prediction_cutoff_utc",
+    ]  # fmt: skip
+    report = v2_audit(
+        calendar=calendar,
+        manifests=manifests,
+        listings=schedule_listings(_store(data_root, "historical")),
+        events=events,
+        quotes=pl.read_parquet(out / "odds_quotes.parquet"),
+        identity=identity_links(pl.read_parquet(out / "event_links.parquet"), events),
+        canonical_matches=matches.select(identity_columns),
+    )
+    typer.echo(json.dumps(report, indent=2, default=str))

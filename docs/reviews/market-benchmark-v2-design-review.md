@@ -1,6 +1,6 @@
 # Market benchmark v2 — design review (DRAFT, pending owner approval)
 
-Date: 2026-11-02. Status: **design review only. Nothing frozen or activated.**
+Date: 2026-11-02 (readiness review appended in §12). Status: **design review only. Nothing frozen or activated.**
 
 **Scope:**
 - Offline only. **0 network calls, 0 credits.** No acquisition and no `pilot-compare`.
@@ -200,7 +200,7 @@ Schedules are approximated as piecewise-constant between stored versions, on a 1
 ## 6. Cost for 10 Grand Slam editions
 
 **Editions:** AO 2021–22, RG 2020–22, Wimbledon 2021–22, US Open 2020–22. AO 2020 predates provider coverage;
-Wimbledon 2020 was cancelled. That gives about 143 tournament days (RG starts on Sunday). The target is about 1,228
+Wimbledon 2020 was cancelled. That gives **143 tournament days** exactly: rest days are requested too, and the count was rechecked against the draft calendar in §12 (RG starts on Sunday). The target is about 1,228
 eligible main-draw matches.
 
 | Design | Lower | Central | Conservative | Notes |
@@ -278,11 +278,11 @@ eligible main-draw matches.
 
 | Item | Proposal |
 |---|---|
-| Scope | **US Open 2021, week 1** (08-30 … 09-05): an edition never inspected. Covers about 116 of 127 main-draw matches (rounds 1–3 and part of round 4), night sessions included |
+| Scope | **US Open 2021, week 1** (08-30 … 09-05): an edition never inspected, night sessions included. Canonical day bounds put **96** main-draw matches certainly inside the window (R128 and R64) and up to **124** possibly inside. This corrects an earlier rough figure of 116 |
 | Requests | 7 × 10 = **70 credits** at 14:00 UTC (10:00 EDT) |
-| Manifest | A2 manifest `v2-feasibility-uso-2021-wk1`, generated offline (SHA-256 `137ef604…dfc3b`); dry run: 7 × `would_request`, 0 calls, no ledger |
+| Manifest | `v2a2-feasibility-uso-2021-wk1`, generated offline by `odds v2-manifest` from the frozen-calendar draft (SHA-256 `df880fd4…aceb2`, strict snapshot window). Dry run: 7 × `would_request`, sentinel events counted as 0, 0 calls, no ledger. The earlier `v2-feasibility-uso-2021-wk1` (`137ef604…`) is superseded and is refused by the runner |
 | Ceiling | 70 planned = 70 absolute; contingency 0 |
-| Outcome-blind go criteria, fixed now | (1) ≥ 6 / 7 snapshots inside (T_d − 10, T_d]; (2) ≥ 90 % of week-1 canonical main-draw matches (identity only) in the population on their first qualifying day; (3) ≥ 85 % of the population with ≥ 2 distinct sources at 30 min; (4) gating median age ≤ 20 and available median ≤ 15; (5) 0 decisions before the model cutoff and ≤ 1 % validity censoring; (6) ≤ 2 % identity conflicts |
+| Outcome-blind go criteria, fixed now | (1) ≥ 6 / 7 snapshots inside (T_d − 10, T_d]; (2) ≥ 90 % of the 96 canonical main-draw matches certainly inside the window (identity only) are `unique` at their first qualifying decision; the share of the up-to-124 possible matches is reported; (3) ≥ 85 % of the population with ≥ 2 distinct sources at 30 min; (4) gating median age ≤ 20 and available median ≤ 15; (5) 0 decisions before the model cutoff and ≤ 1 % validity censoring; (6) ≤ 2 % identity conflicts |
 | Stop rules | Stop at the first runner stop. Stop after day 2 if either snapshot lists no main-draw events |
 | What it tests | Whether A2's coverage holds on unseen data, including night sessions, before any wider spend |
 
@@ -300,3 +300,96 @@ Week 2 (about 11 matches) would cost another 70 credits; it is not proposed unti
    requires explicit owner approval *and* the owner freezing V2, or at least its decision and identity rules, first.
 5. **Further paid acquisition** should proceed only in that order: freeze V2, approve the 70-credit feasibility, audit,
    then decide on the editions. Nothing proceeds automatically. **No credits were spent.**
+
+## 12. Readiness review (2026-11-02, offline, outcome-blind)
+
+Scope: 0 network calls, 0 credits; no acquisition, no outcomes, no model comparisons, no late-check or holdout rows.
+V1 (`e3d3f642…67da21`), the raw store, all existing manifests and both ledgers are byte-identical before and after.
+
+### 12.1 Production integration issues found and fixed
+
+| # | Issue | Fix | Tests |
+|---|---|---|---|
+| 1 | **Identity schema mismatch.** Production `event_links` is keyed by `event_id` with column `status`; the draft expected `provider_event_id` and `link_status`. The replay had renamed columns ad hoc | `identity_links()` adapter: validates required columns, unique `event_id` and `provider_event_id`, no orphan links, and a `match_key` on every linked or duplicate row; otherwise it fails loudly | 5 cases |
+| 2 | **Silent drop in de-vig.** `market_probabilities` keeps only `status == "linked"`, so events V2 resolves as unique despite a store-wide duplicate would vanish | `links_for_market()` passes exactly the V2-`unique` events, as `linked` | end-to-end audit |
+| 3 | **Identity concurrency too narrow.** Only in-population twins counted, so a twin listed concurrently for another day was missed | Claimants are now *all* claimable provider events listed in the decision's as-of snapshot; conflicts at the first decision exclude the match for good | concurrency case |
+| 4 | **Calendar inferred from purchased data.** `_days()` derived days from snapshots | Replaced by a frozen reference calendar (`reference/v2_draft_edition_calendar.csv`, `load_calendar`). Days outside it are refused; rest and empty days are explicit rows | calendar, rest-day, subset cases |
+| 5 | **Boundary mismatch.** The draft says `T_d − 10 < S ≤ T_d`, but the runner accepted `T_d − 10:00` exactly | `StageManifest.strict_snapshot_window` (default false, so V1 manifests are unchanged). Day-anchor manifests set it and the runner stops at age ≥ 10 min | T−9:59 pass, T−10:00, T−10:01 and T+0:01 stop |
+| 6 | **Sentinels counted as events.** The ledger's `events_planned` and the report's `events` included the scheduling sentinel; `stage_audit` would have used V1 denominators | Sentinels are excluded from all counts; `stage_audit` refuses day-anchor manifests; `plan_stage` refuses sentinel-prefixed IDs; legacy sentinel manifests without the strict window are refused | 3 cases |
+| 7 | **No acquisition lock.** | `write_lock` (write-once: manifest and ledger hashes, paid captures); `run_stage` refuses a locked stage; CLI `odds v2-lock` | lock case |
+| 8 | **No V2 audit.** | `v2_audit` and CLI `odds v2-audit`. The denominator chain is: canonical main-draw matches certainly or possibly in the audited days → listed in population → unique → fresh ≥ 1 book → ≥ 2 distinct sources → de-vig usable. It also reports reasons, sensitivity, both age populations, Pinnacle and horizon. Model-cutoff violations are excluded | end-to-end synthetic audit, CLI |
+
+**Restart safety (verified by test).** After a stop on day 2 (an old snapshot), a re-run skips days 1–2 and requests
+day 3 only. The ledger stays cumulative (10/20/30), there is no duplicate request, and day 2 remains
+`snapshot_missing`: it is not re-timed or rescued.
+
+**Real-schema smoke run** (design-exposed 2022 days; pipeline check, not validation): the end-to-end audit reproduces
+the replay.
+- US Open 08-30/31: 48 in population, 48 unique, 48 with ≥ 2 distinct sources, 48 de-vig usable.
+- Wimbledon 06-29: 16 / 16 / 16 / 16.
+- For 1–2-day windows the canonical day bounds are too wide, so the "certainly in days" denominator is 0. Partial
+  windows must therefore be reported as a [certain, possible] range.
+
+### 12.2 Start-of-play assumption (10:00 local is before normal main-draw play)
+
+- **Primary sources:** official dated orders of play were **not consulted**; this review is offline. That is a
+  condition for freezing (§12.5).
+- **Local evidence** from stored 2022 provider listings, schedule fields only: on every day whose schedule was listed
+  before play began, the earliest listed start was **11:00 local** at all four Slams.
+  - AO 2022: 01-19, 01-20.
+  - RG 2022: 05-25.
+  - Wimbledon 2022: 06-29, 06-30.
+  - US Open 2022: 08-30, 08-31, 09-01.
+  - Days first listed mid-day are uninformative.
+- **2020–2021:** no local evidence.
+- **Safety if the assumption fails:** a match listed < 60 min after `T_d` is `short_lead` and excluded, and actual
+  starts before `T_d` are censored. An earlier start of play can cost coverage but cannot breach point-in-time
+  validity. Neither rule was weakened.
+
+### 12.3 Coverage and cost recheck
+
+- **Provider coverage** (`reference/odds_api_tennis_coverage.csv`, documented in DATA_SOURCES §4.2): historical data
+  for US Open from 2020-08-28, RG 2020-09-24, AO 2021-02-06 and Wimbledon 2021-06-25. All 10 editions start after
+  their sport's coverage date, so **US Open 2021 is covered**. Coverage dates say nothing about which bookmakers quote.
+- **Days and credits:**
+  - AO 14 + 14, RG 15 + 15 + 15, Wimbledon 14 + 14, US Open 14 + 14 + 14 = **143 requests = 1,430 credits**.
+  - The Wimbledon 2021 rest day and the expected no-ATP-singles Saturdays are still requested (fixed calendar).
+  - The 10 % contingency (≈ 143) is never auto-used.
+- **Coverage scenarios** (90 / 75 / 60 %) are **forecasts, not measurements**.
+- **Feasibility:** 7 requests, **70 credits planned = 70 absolute**.
+
+### 12.4 Phases of evidence (no conflation)
+
+| Phase | Data | Status | Claims allowed |
+|---|---|---|---|
+| V1 → V2 estimand change | — | V1 anchor ≈ 60 min before each match (acquisition-dependent); V2 = start-of-match-day market | A different estimand, not a fix of V1 |
+| Exploratory design | Wimbledon 2022, US Open 2022 (design-exposed) | Done | Design diagnostics only; never independent validation |
+| Acquisition feasibility | US Open 2021 week 1 (unseen) | Proposed; needs approval | Coverage, timing and identity only; no outcomes |
+| Confirmatory comparison | All locked editions | After V2 freeze, all locks, and separate approval | Model vs market under the frozen V2, once; frozen Phase 2 predictions; 2023–24 and 2025+ untouched |
+
+The V2 timing rule will not be revised in response to model outcomes.
+
+### 12.5 Readiness verdict: PASS WITH CONDITIONS (for freezing V2; not for spending)
+
+**Engineering:** pass. The draft rules run end to end on production schemas, all integration gaps above are fixed and
+tested, and full static checks and tests pass.
+
+**Conditions before freezing** (owner, offline):
+1. Verify each edition's first day, last day and rest days (e.g. whether Wimbledon 2022's middle Sunday was a play
+   day) against official sources. Record them in the calendar with `verified = true` and a source note.
+2. Verify from official dated orders of play that 10:00 local precedes normal main-draw play on every day of the 10
+   editions, recording any exceptions. Exceptions do not change the rule; they are reported as expected `short_lead`
+   coverage loss.
+3. Set the programme credit ceiling. The design suggestion is 1,430 planned plus 143 contingency (never auto-used).
+4. Approve the freeze, creating a new protocol ID and SHA-256 and recording it in DECISIONS.
+
+**Only after freezing and a separate approval of 70 credits**, the commands would be:
+
+```
+uv run quantedge odds stage-run --name v2a2-feasibility-uso-2021-wk1            # dry run: 7 × would_request
+uv run quantedge odds stage-run --name v2a2-feasibility-uso-2021-wk1 --execute --approve-paid-calls
+uv run quantedge odds build-tables --stream historical
+uv run quantedge odds link --stream historical
+uv run quantedge odds v2-audit --edition uso-2021 --stages v2a2-feasibility-uso-2021-wk1
+uv run quantedge odds v2-lock --name v2a2-feasibility-uso-2021-wk1                # only after the audit is reported
+```

@@ -1,0 +1,11 @@
+edition_id,sport_key,season,canonical_tournament_id,time_zone,first_day,last_day,rest_days,expected_empty_days,calendar_source,verified
+ao-2021,tennis_atp_aus_open_singles,2021,sackmann:2021-580,Australia/Melbourne,2021-02-08,2021-02-21,,2021-02-20,canonical start_date (Monday) + standard 14-day Slam format,false
+ao-2022,tennis_atp_aus_open_singles,2022,sackmann:2022-580,Australia/Melbourne,2022-01-17,2022-01-30,,2022-01-29,canonical start_date (Monday) + standard 14-day Slam format,false
+rg-2020,tennis_atp_french_open,2020,sackmann:2020-520,Europe/Paris,2020-09-27,2020-10-11,,2020-10-10,canonical start_date - 1 (Sunday start) to final Sunday,false
+rg-2021,tennis_atp_french_open,2021,sackmann:2021-520,Europe/Paris,2021-05-30,2021-06-13,,2021-06-12,canonical start_date - 1 (Sunday start) to final Sunday,false
+rg-2022,tennis_atp_french_open,2022,sackmann:2022-520,Europe/Paris,2022-05-22,2022-06-05,,2022-06-04,canonical start_date - 1 (Sunday start) to final Sunday,false
+wim-2021,tennis_atp_wimbledon,2021,sackmann:2021-540,Europe/London,2021-06-28,2021-07-11,2021-07-04,2021-07-10,canonical start_date (Monday) + standard 14-day Slam format; middle Sunday rest,false
+wim-2022,tennis_atp_wimbledon,2022,sackmann:2022-540,Europe/London,2022-06-27,2022-07-10,,2022-07-09,canonical start_date (Monday) + standard 14-day Slam format; middle Sunday assumed a play day,false
+uso-2020,tennis_atp_us_open,2020,sackmann:2020-560,America/New_York,2020-08-31,2020-09-13,,2020-09-12,canonical start_date (Monday) + standard 14-day Slam format,false
+uso-2021,tennis_atp_us_open,2021,sackmann:2021-560,America/New_York,2021-08-30,2021-09-12,,2021-09-11,canonical start_date (Monday) + standard 14-day Slam format,false
+uso-2022,tennis_atp_us_open,2022,sackmann:2022-560,America/New_York,2022-08-29,2022-09-11,,2022-09-10,canonical start_date (Monday) + standard 14-day Slam format,false
