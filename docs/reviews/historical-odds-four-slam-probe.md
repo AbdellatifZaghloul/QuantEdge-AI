@@ -144,6 +144,11 @@ All criteria are outcome-blind and fixed now. Linking to canonical matches uses 
 The programme ceiling for A–D is **10,750 credits**. After D, the single confirmatory `pilot-compare` run (A6) is made
 under `market-benchmark-v1`.
 
+> **Erratum (2026-11-02):** the Stage D row is inconsistent. 9 × 1,300 = 11,700, not 9,000. The 10,750 total matches
+> 9,000 (i.e. 1,000 per edition). The owner chooses either 1,300 per edition (11,700 cumulative, programme 13,450) or
+> 1,000 per edition (9,000, programme 10,750). See `stage-a-wimbledon-2022-preflight.md` §9. Stage A: the exact
+> manifest needs 9 calls (90 credits), not 12 clusters.
+
 **Go criteria after each stage** (all required; otherwise stop, report, no further spend):
 1. ≥ 80 % of planned events have ≥ 1 bookmaker `available` at 30-min freshness.
 2. ≥ 70 % have ≥ 2 available books (consensus feasible).

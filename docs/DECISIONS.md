@@ -30,6 +30,7 @@ Last updated: 2026-11-01 (Phase 3B completion).
 | D-28 | Selector timing hardening: quarantine source timestamps later than observation or decision, late snapshots and in-play quotes; reject missing source timestamps by default; anchor decisions on the earliest announced start | Phase 3B |
 | D-29 | Provider-availability probe defined: 4 historical h2h/eu snapshots (2022 Slams, day 2, 12:00 UTC), 40 credits total, outcomes never joined; **execution requires approvals A1–A4** (docs/reviews/phase-3b.md §6). Default credit ceiling stays 0 | Owner directive, Phase 3B |
 | D-30 | Forward live capture specified (docs/specs/forward-capture.md) but **not active**; requires approval A7 | Owner directive, Phase 3B |
+| D-31 | Staged historical acquisition runs from an offline manifest:<br>• requests grouped at the earliest decision, decision − snapshot ≤ 15 min;<br>• cumulative append-only credit ledger capped at the planned total (stage ceiling ≤ 130 for A);<br>• `max_retries = 0`, quota reconciled per call, stop on any mismatch;<br>• outcome-blind go/no-go fixed in code (`odds stage-audit`).<br>Every paid stage still needs explicit owner authorisation | Stage A preflight (docs/reviews/stage-a-wimbledon-2022-preflight.md) |
 | D-17 | Fetch from `Aneeshers/tennis-sackmann-archive` at full commit `83733587353df8a41f2fd4f516147d5aa83f5a8d`. Verify git blob SHA-1s against the tree at that commit and record our own SHA-256 manifest | Owner approval 2026-11-01 |
 
 ---

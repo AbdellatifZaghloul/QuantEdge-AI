@@ -28,6 +28,17 @@ from quantedge.odds.planner import build_plan
 from quantedge.odds.preregistration import load_protocol
 from quantedge.odds.schemas import validate_odds_table
 from quantedge.odds.selector import SelectorConfig, decisions_from_schedule, select_quotes
+from quantedge.odds.stage import (
+    StageManifest,
+    StagePlanError,
+    StageRunStoppedError,
+    manifest_summary,
+    plan_stage,
+    read_ledger,
+    returned_snapshots,
+    run_stage,
+    stage_audit,
+)
 from quantedge.odds.store import CaptureStore, Stream
 from quantedge.odds.tables import build_odds_tables_with_quarantine
 from quantedge.odds.theoddsapi import (
@@ -333,3 +344,126 @@ def pilot_compare_cmd(
         holdout_start=splits.holdout_start,
     )
     typer.echo(json.dumps(report, indent=2, default=str))
+
+
+def _stage_dir(data_root: Path, name: str) -> Path:
+    return data_root / "processed" / "odds" / PROVIDER / "stages" / name  # gitignored
+
+
+@odds_app.command("stage-plan")
+def stage_plan_cmd(
+    name: Annotated[str, typer.Option(help="Stage name, e.g. stage-a-wimbledon-2022.")],
+    discovery_capture_id: Annotated[
+        str, typer.Option(help="Stored historical capture whose schedule defines the stage.")
+    ],
+    max_gap_minutes: Annotated[
+        float, typer.Option(help="Max decision - snapshot gap when decisions share one call.")
+    ] = 15.0,
+    stage_ceiling: Annotated[int, typer.Option(help="Cumulative stage credit ceiling.")] = 130,
+    lead_minutes: float = 60.0,
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """Offline request manifest for one stage (zero network calls, zero credits)."""
+    store = _store(data_root, "historical")
+    found = [(r, c) for r, c in store.iter_captures() if r.capture_id == discovery_capture_id]
+    if len(found) != 1:
+        typer.echo(f"discovery capture not found: {discovery_capture_id}", err=True)
+        raise typer.Exit(code=1)
+    record, capture = found[0]
+    sport = record.competition_key or ""
+    snapshot = TheOddsApiNormalizer().normalize(capture)
+    api = _api_config(config_dir, None)
+    try:
+        manifest = plan_stage(
+            name=name,
+            sport_key=sport,
+            discovery_capture_id=record.capture_id,
+            discovery_snapshot=snapshot.observed_at_utc,
+            events=snapshot.events,
+            already_captured=sorted(returned_snapshots(store, sport)),
+            lead_minutes=lead_minutes,
+            max_gap_minutes=max_gap_minutes,
+            markets=api.markets,
+            regions=api.regions,
+            stage_ceiling=stage_ceiling,
+        )
+    except StagePlanError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    out = _stage_dir(data_root, name)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "manifest.json").write_text(manifest.to_json(), encoding="utf-8", newline="\n")
+    typer.echo(
+        json.dumps(
+            {
+                "manifest": str(out / "manifest.json"),
+                "discovery_snapshot_utc": manifest.discovery_snapshot_utc,
+                "grid_offset_minutes": manifest.grid_offset_minutes,
+                "events": sum(len(r.events) for r in manifest.requests),
+                "requests": len(manifest.requests),
+                "planned_credits": manifest.planned_credits,
+                "stage_ceiling": manifest.stage_ceiling,
+                "rows": manifest_summary(manifest),
+            },
+            indent=2,
+        )
+    )
+
+
+@odds_app.command("stage-run")
+def stage_run_cmd(
+    name: Annotated[str, typer.Option(help="Stage name used with stage-plan.")],
+    execute: Annotated[bool, typer.Option(help="Make the paid calls (default: dry run).")] = False,
+    approve_paid_calls: Annotated[
+        bool, typer.Option(help="Owner approval for every paid call in the manifest.")
+    ] = False,
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """Walk a stage manifest with a cumulative credit ledger; dry run unless both flags are set."""
+    out = _stage_dir(data_root, name)
+    manifest = StageManifest.from_json((out / "manifest.json").read_text(encoding="utf-8"))
+    client = None
+    if execute:
+        if not approve_paid_calls:
+            typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
+            raise typer.Exit(code=2)
+        config = _api_config(config_dir, manifest.planned_credits).model_copy(
+            update={"max_retries": 0}
+        )
+        client = TheOddsApiClient(config)
+    try:
+        report = run_stage(
+            manifest,
+            store=_store(data_root, "historical"),
+            ledger_path=out / "ledger.jsonl",
+            client=client,
+            execute=execute,
+        )
+    except (StageRunStoppedError, OddsApiError) as exc:
+        typer.echo(f"STOPPED: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    rows = [{k: v for k, v in r.items() if k != "capture_id"} for r in report]
+    typer.echo(json.dumps({"execute": execute, "rows": rows}, indent=2))
+
+
+@odds_app.command("stage-audit")
+def stage_audit_cmd(
+    name: Annotated[str, typer.Option(help="Stage name used with stage-plan.")],
+    data_root: DataRoot = Path("data"),
+) -> None:
+    """Outcome-blind go/no-go criteria for a completed stage (offline; run build-tables first)."""
+    stage = _stage_dir(data_root, name)
+    manifest = StageManifest.from_json((stage / "manifest.json").read_text(encoding="utf-8"))
+    out = data_root / "processed" / "odds" / PROVIDER / "historical"
+    links_path = out / "event_links.parquet"
+    result = stage_audit(
+        manifest,
+        events=pl.read_parquet(out / "odds_events.parquet"),
+        quotes=pl.read_parquet(out / "odds_quotes.parquet"),
+        quarantine=pl.read_parquet(out / "odds_quote_quarantine.parquet"),
+        ledger=read_ledger(stage / "ledger.jsonl"),
+        links=pl.read_parquet(links_path) if links_path.exists() else None,
+    )
+    typer.echo(json.dumps(result, indent=2))
