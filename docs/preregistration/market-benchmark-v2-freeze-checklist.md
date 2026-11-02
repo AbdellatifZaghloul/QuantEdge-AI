@@ -1,4 +1,13 @@
-# `market-benchmark-v2` — owner freeze package (V2 is NOT FROZEN)
+# `market-benchmark-v2` — owner freeze package
+
+> **FROZEN 2026-11-03** by explicit owner approval (freeze only; DECISIONS D-40).
+> - `configs/preregistration/market_benchmark_v2.yaml`, SHA-256
+>   `ad319ba7384cd95d5b1c2c45fd5c3c058af6af41c6e95c3926f253e990fae70c`.
+> - Calendar SHA-256 `2db8ee7b0b041e2eba54d3926a8566d5350eed9e9e6ae537c1af5c0f0227d4a1`.
+> - Programme ceiling 1,430; the 143 contingency is **not authorized**.
+> - No acquisition is authorized: tranche 1 (20 credits) needs a separate owner approval.
+>
+> The package below is the pre-freeze record.
 
 Date: 2026-11-03.
 

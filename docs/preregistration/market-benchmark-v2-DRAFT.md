@@ -1,4 +1,11 @@
-# DRAFT — `market-benchmark-v2` (NOT FROZEN, NOT ACTIVE)
+# `market-benchmark-v2` — design prose (superseded by the FROZEN protocol)
+
+> **FROZEN 2026-11-03:** `configs/preregistration/market_benchmark_v2.yaml` (SHA-256
+> `ad319ba7384cd95d5b1c2c45fd5c3c058af6af41c6e95c3926f253e990fae70c`, DECISIONS D-40) is the authoritative
+> protocol. This file is the pre-freeze draft prose, kept for the record. Where it differs from the frozen YAML,
+> the YAML governs; for example, the 143 contingency is not authorized.
+
+## Pre-freeze draft text (historical)
 
 > **Status: proposal for owner review.**
 > - No protocol ID has been registered and no SHA-256 exists.

@@ -451,3 +451,20 @@ Page 1 (cover) of the official Easy Access Guide 2022 reads "THE CHAMPIONSHIPS, 
   complete-calendar `verified` stays false.
 - The 10:00 local rule, the 60-minute minimum listed lead, the 1,430 ceiling and the separate 20 + 50 approvals are
   unchanged.
+
+## 16. Freeze (2026-11-03)
+
+By explicit owner approval (freeze only), `market-benchmark-v2` (candidate A2) is frozen as
+`configs/preregistration/market_benchmark_v2.yaml`.
+
+| Item | Value |
+|---|---|
+| Frozen protocol SHA-256 | `ad319ba7384cd95d5b1c2c45fd5c3c058af6af41c6e95c3926f253e990fae70c` |
+| Calendar SHA-256 | `2db8ee7b0b041e2eba54d3926a8566d5350eed9e9e6ae537c1af5c0f0227d4a1` |
+| Implementation commit | `c938e2c4eba5a56d0b34e741b4497d6a19f8d7c7` |
+
+- **Differences from the candidate:** only status, freeze date, calendar hash, contingency (0, not authorized), the
+  start-of-play note and the implementation record. A test asserts this.
+- **Pinned fingerprints:** `tests/unit/test_protocol_fingerprints.py` pins V1 and V2, plus the calendar and
+  implementation hashes.
+- **No acquisition authorized:** tranche 1 needs a separate approval.

@@ -789,7 +789,7 @@ def test_calendar_date_evidence_is_organizer_level_and_nothing_fully_verified() 
 # --------------------------------------------------------------------- candidate protocol
 
 
-def test_candidate_protocol_is_not_frozen_and_matches_the_code() -> None:
+def test_candidate_protocol_text_stays_a_candidate_and_matches_the_code() -> None:
     cand = yaml.safe_load(
         (REPO_ROOT / "docs/preregistration/market-benchmark-v2-CANDIDATE.yaml").read_text(
             encoding="utf-8"
@@ -797,7 +797,6 @@ def test_candidate_protocol_is_not_frozen_and_matches_the_code() -> None:
     )
     assert cand["status"] == "CANDIDATE_NOT_FROZEN" and cand["frozen_on"] is None
     assert cand["population"]["calendar_sha256"] == "SET_AT_FREEZE"
-    assert not (REPO_ROOT / "configs/preregistration/market_benchmark_v2.yaml").exists()
     timing = cand["timing"]
     assert timing["decision_local_time"] == v2_draft.DECISION_LOCAL_TIME.strftime("%H:%M")
     assert timing["snapshot_window_minutes"] * 60 == v2_draft.SNAPSHOT_TOLERANCE.total_seconds()
