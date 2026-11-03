@@ -18,6 +18,8 @@ FORBIDDEN_SUFFIXES = (".parquet", ".xlsx", ".xls", ".zip", ".pkl", ".feather", "
 CSV_ALLOWED_DIRS = ("tests/", "src/quantedge/reference/")
 # Raw provider responses are JSON/JSONL: only synthetic test fixtures may be tracked.
 JSON_ALLOWED_DIRS = ("tests/",)
+# Reviewed, SHA-pinned project records (exact paths only; never provider data).
+JSON_ALLOWED_FILES = ("configs/frozen/phase5_gbm_v1.json",)
 
 SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     "private_key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"),
@@ -46,9 +48,8 @@ def path_violations(paths: Iterable[str], root: Path | None = None) -> list[str]
             problems.append(f"{text}: data/binary artifact type must not be tracked")
         if text.lower().endswith(".csv") and not text.startswith(CSV_ALLOWED_DIRS):
             problems.append(f"{text}: CSV outside tests/ and reference tables")
-        if text.lower().endswith((".json", ".jsonl", ".json.gz")) and not text.startswith(
-            JSON_ALLOWED_DIRS
-        ):
+        is_json = text.lower().endswith((".json", ".jsonl", ".json.gz"))
+        if is_json and not text.startswith(JSON_ALLOWED_DIRS) and text not in JSON_ALLOWED_FILES:
             problems.append(f"{text}: JSON outside tests/ (possible raw provider response)")
         if root is not None:
             file = root / text

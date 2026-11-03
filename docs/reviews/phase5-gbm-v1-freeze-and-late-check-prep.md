@@ -109,11 +109,11 @@ New synthetic tests: `tests/unit/test_phase5_late_check.py`, **27 passed**. They
 | Check | Result |
 |---|---|
 | Full pytest | **436 passed** |
-| CI selection (`-m "not local"`) | **424 passed**, 12 deselected |
+| CI selection (`-m "not local"`) | **427 passed**, 12 deselected (after the hygiene fix) |
 | Ruff check and format | Pass |
 | mypy (CI scope, `src`) | Pass (67 files) |
 | AT-19 rebuild (`data build`, `qa`, `audit`) | Pass offline, 0 network attempts |
-| Hygiene | Pass |
+| Hygiene | Pass. The first push failed CI hygiene (JSON outside `tests/`). The freeze record is SHA-pinned, so it was not reformatted; instead the hygiene guard now allows exactly `configs/frozen/phase5_gbm_v1.json`, with tests that any other JSON in `configs/frozen/` is still flagged |
 | Protocol fingerprints (V1/V2) | 4 passed |
 | Integrity baseline | 43/43 before and after |
 

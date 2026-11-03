@@ -24,6 +24,8 @@ from tests.conftest import REPO_ROOT
         "docs/export.csv",
         "odds/the_odds_api/snapshot.json",
         "captures.jsonl",
+        "configs/frozen/other.json",
+        "configs/frozen/phase5_gbm_v1.jsonl",
     ],
 )
 def test_forbidden_paths_are_flagged(path: str) -> None:
@@ -38,6 +40,7 @@ def test_forbidden_paths_are_flagged(path: str) -> None:
         "src/quantedge/reference/round_ordinal.csv",
         "docs/ARCHITECTURE.md",
         "src/quantedge/canonical/build.py",
+        "configs/frozen/phase5_gbm_v1.json",
     ],
 )
 def test_allowed_paths_pass(path: str) -> None:
