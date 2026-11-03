@@ -15,6 +15,7 @@ dependencies = [
     "tzdata>=2024.1",  # IANA database for polars UTC datetimes on Windows
     "numpy>=2.0",
     "matplotlib>=3.9",
+    "lightgbm>=4.5",
 ]
 
 [project.scripts]

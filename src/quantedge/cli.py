@@ -20,6 +20,7 @@ from quantedge.core.chronology import load_chronology_config
 from quantedge.core.splits import load_split_config
 from quantedge.curation.audit import run_audit
 from quantedge.experiments.phase2 import load_phase2_config, run_phase2
+from quantedge.experiments.phase5 import load_phase5_config, run_phase5
 from quantedge.experiments.registry import LateCheckLimitError, read_registry
 from quantedge.odds import commands as odds_commands
 from quantedge.quality.report import build_report, write_report
@@ -161,6 +162,32 @@ def _run(
     )
     typer.echo(json.dumps({"run_id": run_id, "headline_log_loss": metrics["headline"]}))
     typer.echo(f"report: {run_dir / 'report.md'}")
+
+
+@experiment_app.command("phase5")
+def experiment_phase5_cmd(
+    config: ExperimentConfig = Path("configs/experiments/phase5_gbm.yaml"),
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+    runs_root: RunsRoot = Path("runs"),
+) -> None:
+    """LightGBM candidate vs frozen Elo on the inner folds (reads cut at splits.inner_end)."""
+    text = config.read_text(encoding="utf-8")
+    run_id, run_dir, metrics = run_phase5(
+        resolve_build_dir(data_root / "processed"),
+        load_split_config(config_dir / "splits.yaml"),
+        load_phase5_config(config),
+        text,
+        runs_root=runs_root,
+        repo_root=Path(),
+    )
+    out = {
+        "run_id": run_id,
+        "headline_log_loss": metrics["headline"],
+        "decision": metrics["decision"],
+    }
+    typer.echo(json.dumps(out, default=str))
+    typer.echo(f"run: {run_dir}")
 
 
 @experiment_app.command("list")

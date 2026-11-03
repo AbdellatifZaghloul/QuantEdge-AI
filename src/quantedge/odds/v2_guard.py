@@ -34,7 +34,7 @@ from quantedge.odds.stage import (
     read_ledger,
     run_stage,
 )
-from quantedge.odds.store import CaptureStore
+from quantedge.odds.store import CaptureStore, StoreIntegrityError
 from quantedge.odds.theoddsapi import TheOddsApiClient
 from quantedge.odds.v2_draft import (
     EditionCalendar,
@@ -112,8 +112,14 @@ def is_v2_manifest(manifest: StageManifest) -> bool:
     return any(is_sentinel(e.provider_event_id) for r in manifest.requests for e in r.events)
 
 
-def _verify_stage_files(stage_dir: Path, name: str, *, ledger_captures: list[str]) -> None:
-    """Tranche plan bound to the manifest; lock bound to the manifest, ledger and captures."""
+def _verify_stage_files(
+    stage_dir: Path, name: str, *, ledger_captures: list[str], verified_sha: dict[str, str]
+) -> None:
+    """Tranche plan bound to the manifest; lock bound to the manifest, ledger and captures.
+
+    ``verified_sha`` maps capture id -> SHA-256 of a body re-hashed on read; every locked capture
+    must be present with exactly the hash recorded in the lock.
+    """
     if (stage_dir / TRANCHE_FILE).exists():
         try:
             read_tranche_plan(stage_dir)
@@ -127,6 +133,9 @@ def _verify_stage_files(stage_dir: Path, name: str, *, ledger_captures: list[str
             raise V2GuardError(f"{name}: ledger changed after the lock")
         if [c["capture_id"] for c in lock["captures"]] != ledger_captures:
             raise V2GuardError(f"{name}: lock does not list the ledger's captures")
+        for c in lock["captures"]:
+            if verified_sha.get(c["capture_id"]) != c["sha256"]:
+                raise V2GuardError(f"{name}: locked capture {c['capture_id']} fails its SHA-256")
 
 
 def programme_state(
@@ -135,7 +144,12 @@ def programme_state(
     """Account every V2 stage; raise on any inconsistency (fail closed)."""
     calendars = load_calendar()
     state = ProgrammeState(ceiling=ceiling)
-    records = {r.capture_id: r for r in store.records()}
+    try:  # re-hash every stored body; a single mismatch refuses the whole programme
+        verified = {rec.capture_id: rec for rec, _ in store.iter_captures()}
+    except StoreIntegrityError as exc:
+        raise V2GuardError(f"capture store integrity: {exc}") from exc
+    records = verified
+    verified_sha = {cid: rec.sha256 for cid, rec in verified.items()}
     all_ledger_captures: set[str] = set()
     for stage_dir in sorted(p for p in stages_root.iterdir() if (p / "manifest.json").exists()):
         name = stage_dir.name
@@ -172,7 +186,12 @@ def programme_state(
             state.ledger_captures.add(e.capture_id)
         if ledger and ledger[-1].cumulative_credits != charged:
             raise V2GuardError(f"{name}: ledger cumulative total does not reconcile")
-        _verify_stage_files(stage_dir, name, ledger_captures=[e.capture_id for e in ledger])
+        _verify_stage_files(
+            stage_dir,
+            name,
+            ledger_captures=[e.capture_id for e in ledger],
+            verified_sha=verified_sha,
+        )
         state.spent += charged
         state.stages[name] = {
             "edition": calendar.edition_id,

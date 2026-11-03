@@ -1,0 +1,48 @@
+# Phase 5 candidate: LightGBM on point-in-time features vs the frozen Phase 2 Elo baseline.
+# Written before any LightGBM result was computed. Inner development folds only (test years
+# 2013-2022); every reader is cut at splits.inner_end. Late check (2023-24) and holdout (2025+)
+# are never read. Changing anything below after results are seen requires a new name/version.
+name: phase5_gbm
+model_version: phase5-gbm-v1
+seed: 20261103
+bootstrap_replicates: 2000
+
+baseline:
+  phase2_run_id: 0a5b056019ec          # frozen Elo run; its inner test predictions are the baseline
+  column: p_elo_overall_recal          # primary comparator (identical eligible matches)
+  secondary_column: p_elo_surface_recal
+
+features:
+  elo_reference: {k_mode: fivethirtyeight, k_c: 250}   # Phase 2's pre-registered reference config
+  rank_staleness_days: 365
+  rank_cap: 2000
+  stats_half_life_days: 365            # serve/return statistics, exponentially decayed
+  stats_prior_points: 200              # shrinkage strength (points) towards the tour mean
+  surface_stats_prior_points: 400      # shrinkage of surface stats towards the player's overall
+  form_half_life_days: 90              # Elo-residual form
+  workload_windows_days: [14, 30]
+  inactivity_days: 60
+
+training:
+  population: eval_eligible            # Gate-0 eligibility, as in Phase 2
+  validation: last year of each fold's fit window (fit_end year); never the calibration or test year
+  # Deliberately small, fixed search budget (4 configurations per fold) to limit overfitting.
+  grid:
+    - {num_leaves: 15, min_data_in_leaf: 200, learning_rate: 0.05}
+    - {num_leaves: 31, min_data_in_leaf: 200, learning_rate: 0.05}
+    - {num_leaves: 15, min_data_in_leaf: 500, learning_rate: 0.05}
+    - {num_leaves: 31, min_data_in_leaf: 500, learning_rate: 0.05}
+  fixed: {feature_fraction: 0.8, bagging_fraction: 0.8, bagging_freq: 1, lambda_l2: 1.0}
+  max_rounds: 2000
+  early_stopping_rounds: 50
+  calibration: slope_only_on_calibration_year   # same as Phase 2; preserves antisymmetry
+  symmetrize: true                     # p = (f(x) + 1 - f(swap(x))) / 2
+
+decision:
+  primary: paired_log_loss_difference  # LightGBM_recal - Elo_overall_recal, pooled 2013-2022
+  keep_if: upper bound of the 95% ISO-week block-bootstrap CI < 0
+  secondary: [paired_brier_difference, per_year_stability, calibration_slope_and_ece]
+  note: >-
+    Inner test years were already scored for Elo in Phase 2, so a KEEP here is a development
+    result, not confirmation. Confirmation needs a single counted late-check look, which is NOT
+    part of this task.

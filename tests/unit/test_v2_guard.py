@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import stat
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -293,6 +294,32 @@ def test_paid_v1_stage_execution_is_refused(
          "--data-root", str(tmp_path), "--config-dir", str(REPO_ROOT / "configs")],
     )  # fmt: skip
     assert result.exit_code == 2 and "suspended (D-34)" in result.output
+
+
+def test_locked_capture_hash_must_match_the_verified_store(tmp_path: Path) -> None:
+    store = store_at(tmp_path)
+    a = make_stage(tmp_path, "a", DAYS[:2])
+    pay(a, store, DAYS[:2])
+    write_lock(a, store)
+    b = make_stage(tmp_path, "b", DAYS[2:3])
+    assert preflight(b, repo_root=REPO_ROOT, store=store)["spent_before"] == 20
+    lock = json.loads((a / "lock.json").read_text(encoding="utf-8"))
+    lock["captures"][0]["sha256"] = "0" * 64  # the lock no longer matches the stored capture
+    (a / "lock.json").write_text(json.dumps(lock), encoding="utf-8")
+    with pytest.raises(V2GuardError, match="fails its SHA-256"):
+        preflight(b, repo_root=REPO_ROOT, store=store)
+
+
+def test_a_tampered_capture_body_is_refused_in_preflight(tmp_path: Path) -> None:
+    store = store_at(tmp_path)
+    a = make_stage(tmp_path, "a", DAYS[:1])
+    pay(a, store, DAYS[:1])
+    b = make_stage(tmp_path, "b", DAYS[1:2])
+    body_file = next(p for p in store.root.rglob("*") if p.is_file() and p.name != "captures.jsonl")
+    body_file.chmod(stat.S_IWRITE | stat.S_IREAD)  # stored bodies are read-only by design
+    body_file.write_bytes(body_file.read_bytes() + b" ")
+    with pytest.raises(V2GuardError, match="capture store integrity"):
+        preflight(b, repo_root=REPO_ROOT, store=store)
 
 
 # Every paid call path must stay behind a guard. The frozen modules cannot be edited, so new call
