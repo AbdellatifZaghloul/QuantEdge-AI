@@ -1,0 +1,70 @@
+# PRE-REGISTERED CONFIRMATION RULE — phase5-gbm-v1 late check (2023-2024).
+# Written and frozen 2026-11-03 BEFORE any 2023-2024 LightGBM result exists. Preparation only:
+# executing this check needs a separate, explicit owner approval. Never edit in place.
+protocol_id: phase5-gbm-v1-late-check
+status: FROZEN
+frozen_on: 2026-11-03
+model_version: phase5-gbm-v1
+freeze_record:
+  path: configs/frozen/phase5_gbm_v1.json
+  sha256: 5887fae1431e6d2b63134e05dfddd38d2b301bc21bed0cee8bba0e6ee8e2e1c5
+
+folds:                     # Phase 2 late-check folds; test-year labels never used for that fold
+  - {test_year: 2023, fit_end: 2021-12-31, calibration_year: 2022}
+  - {test_year: 2024, fit_end: 2022-12-31, calibration_year: 2023}
+data:
+  read_end: development_end        # 2024-12-31; the 2025+ holdout is never read
+  view: development
+
+population: >-
+  eval_eligible matches (Gate-0 eligibility.v1) with tournament start in 2023 or 2024 that are
+  present exactly once in both the LightGBM late-check output and the registered Phase 2 Elo
+  late-check predictions, with identical labels. Any missing, extra or duplicate key, or any label
+  mismatch, aborts the run (the look still counts).
+
+baseline:
+  phase2_late_check_run_id: 2f51db502421
+  file: test_predictions.parquet
+  size_bytes: 1706887              # recorded from file metadata only; contents not read
+  column: p_elo_overall_recal
+  modification: never
+
+primary:
+  metric: paired_log_loss_difference
+  definition: mean over matches of log_loss(phase5-gbm-v1 recalibrated) - log_loss(frozen Elo)
+  pooled_years: [2023, 2024]
+uncertainty:
+  method: iso_week_block_bootstrap     # tournament-week blocks (evaluation.walkforward.week_blocks)
+  replicates: 2000
+  seed: 20261103
+  level: 0.95
+decision:
+  confirmed_if: ci_high < 0            # strictly below zero
+  otherwise: NOT_CONFIRMED
+
+secondary:                 # reported only; never a reason to change the primary decision
+  - paired_brier_difference
+  - calibration_slope_and_intercept
+  - expected_calibration_error
+  - per_year_2023_2024_differences
+  - grand_slam_main_draw_subgroup
+  - match_counts_and_exclusions
+  - unseen_category_label_counts
+sensitivity:
+  - name: without_rounds_into_draw     # documented feature-timing limitation
+    definition: same frozen procedure with rounds_into_draw set to missing
+categories:
+  mapping: from freeze record (development data <= 2022-12-31)
+  unseen_labels: encode_as_missing_nan  # fixed before any late-check data was read
+
+looks:
+  confirmatory_looks: 1                # a further look only after a recorded failure
+  registry_cap: splits.late_check_max_looks
+  recorded: before any late-check data is loaded; failures after opening still count
+  audit: runs/late_check_audit.jsonl and a durable backup (default data/audit/late_check_audit.jsonl)
+
+disclosure: >-
+  The frozen Elo baseline's 2023-2024 results were examined before (phase2-elo-v1 used 2 of its 3
+  late-check looks), so this comparison is blind for LightGBM only, not a completely untouched
+  comparison. The 2013-2022 development folds were inspected repeatedly; nothing from them may be
+  changed after this rule. No market, betting or profitability conclusion follows from this check.

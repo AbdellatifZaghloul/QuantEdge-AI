@@ -1,0 +1,194 @@
+{
+  "config": {
+    "path": "configs/experiments/phase5_gbm.yaml",
+    "sha256": "cb1b5c4ef420a7bb67a826dd3f6b1fb076f06134fb9cc4749a148d24e7ca322b"
+  },
+  "environment": {
+    "lightgbm": "4.7.0",
+    "lightgbm_now": "4.7.0",
+    "numpy": "2.5.4",
+    "polars": "2.1.0",
+    "python": "3.12.16"
+  },
+  "features": {
+    "antisymmetric": [
+      "elo_diff",
+      "surface_elo_diff",
+      "log_elo_n_diff",
+      "log_rank_diff",
+      "unranked_diff",
+      "serve_diff",
+      "return_diff",
+      "surface_serve_diff",
+      "surface_return_diff",
+      "bp_saved_diff",
+      "log_stats_points_diff",
+      "form_diff",
+      "matches_14_diff",
+      "matches_30_diff",
+      "minutes_14_diff",
+      "minutes_30_diff",
+      "days_since_last_diff",
+      "inactive_diff",
+      "age_diff"
+    ],
+    "categorical": [
+      "level_code",
+      "surface_code",
+      "draw_code"
+    ],
+    "category_mapping": {
+      "draw_code": {
+        "challenger_main": 0,
+        "challenger_qualifying": 1,
+        "tour_main": 2,
+        "tour_qualifying": 3
+      },
+      "level_code": {
+        "A": 0,
+        "C": 1,
+        "D": 2,
+        "F": 3,
+        "G": 4,
+        "M": 5
+      },
+      "surface_code": {
+        "Carpet": 0,
+        "Clay": 1,
+        "Grass": 2,
+        "Hard": 3
+      }
+    },
+    "category_sources": {
+      "draw_code": "draw_category",
+      "level_code": "level",
+      "surface_code": "surface"
+    },
+    "known_limitations": [
+      "rounds_into_draw = round_ordinal - min(round_ordinal) over the draw's complete records, not over pre-tournament structure. It equals the structural first round in all but ~28 of ~3,900 ordinary draws (other differences are Davis Cup / Finals round-robin labelling) and never depends on results; development effect +0.0003.",
+      "category codes were data-derived in v1; the late check uses this pinned mapping."
+    ],
+    "label_sets_equal_on_2013_2022_subset": true,
+    "mapping_reproduces_v1_encoding": {
+      "identical": true,
+      "rows_compared": 390171
+    },
+    "mapping_source": "development data <= 2022-12-31",
+    "missing_values": "LightGBM native NaN handling; ranks capped at 2000 with indicator; players without knowable statistics shrunk to the knowable tour mean",
+    "order": [
+      "elo_diff",
+      "surface_elo_diff",
+      "log_elo_n_diff",
+      "log_rank_diff",
+      "unranked_diff",
+      "serve_diff",
+      "return_diff",
+      "surface_serve_diff",
+      "surface_return_diff",
+      "bp_saved_diff",
+      "log_stats_points_diff",
+      "form_diff",
+      "matches_14_diff",
+      "matches_30_diff",
+      "minutes_14_diff",
+      "minutes_30_diff",
+      "days_since_last_diff",
+      "inactive_diff",
+      "age_diff",
+      "elo_mean",
+      "log_elo_n_min",
+      "best_of",
+      "level_code",
+      "surface_code",
+      "draw_code",
+      "round_ordinal",
+      "rounds_into_draw"
+    ],
+    "point_in_time": "Elo/ranks via Phase 2 replay (knowability rule plus earlier-round outcome exception); statistics, form and workload via a knowability-only sweep",
+    "shared": [
+      "elo_mean",
+      "log_elo_n_min",
+      "best_of",
+      "level_code",
+      "surface_code",
+      "draw_code",
+      "round_ordinal",
+      "rounds_into_draw"
+    ],
+    "unseen_label_policy": "encode_as_missing_nan"
+  },
+  "files_sha256": {
+    "src/quantedge/core/asof.py": "6ef99365903e67577729a9a64a2ede27f76b42e7e91a6ecb39eb901f6fd00a69",
+    "src/quantedge/core/dataview.py": "86974ee2231d3170c99cd77699b2107e5d1ddd4f9ed21ff542a2e2451b3e2a3f",
+    "src/quantedge/core/splits.py": "04fdbc7ff40503c3391d7aa91946d483e111a8a0b198541a7ff3aadf0a7b859f",
+    "src/quantedge/curation/eligibility.py": "d51b15f4c57bf95570f74a477428b7f073e942134d89af3243e731b3a4d767d9",
+    "src/quantedge/evaluation/bootstrap.py": "8bdfa466d77f022bac486971ed1f890a9a1a2647a2a11e2256b00bdf562537e6",
+    "src/quantedge/evaluation/metrics.py": "0fdf1346ac3c5e3278a83bf49a66bb23a2476bd9bff10d6d6557ff44abcf2104",
+    "src/quantedge/evaluation/walkforward.py": "f5f03e828d36a77592ce502d80ba51eb1537f52c3797902bd5ffbc2c793d977f",
+    "src/quantedge/experiments/phase5.py": "59c22ddd13897e7fde64f5e7ba705afe6751e7c17dfccfd8ad82bf911327c2af",
+    "src/quantedge/models/gbm.py": "1ccacb53cc7724b8c5adc5bdb172bd46fd6074c3df83cb43baa5faae4d5ae4f9",
+    "src/quantedge/models/gbm_features.py": "ab5985ba14bd1bda5269740ef9cfe69d2b84d7adf082ab4ff3dcdb05fc233d05",
+    "src/quantedge/models/rank_baseline.py": "0f6476446d7a8a21b4fdaf3865c0fa3c20a738f2ea047847f190e15cab2c8d85",
+    "src/quantedge/ratings/elo.py": "5d75c7b52b4a0c6495c0096d4c39e2c2eb4eddae5d63b6dac0f2cc2e44fb86a4",
+    "src/quantedge/ratings/features.py": "9afc74b9c1faea45b47ed0b451432a1bf77e1ebc09df33526bad757c75ab5445"
+  },
+  "model_version": "phase5-gbm-v1",
+  "nature": "frozen training procedure; per-fold models are re-fitted on each fold's window",
+  "original_run": {
+    "artifacts_sha256": {
+      "manifest.json": "dc1f9bdac6953d1ffd6f0f5adfcc1cfebc2d0dff2025c71306eed9762a39db59",
+      "metrics.json": "9dfe287852ab968963c461ceb1a407cf3ec561f73570aa3f229f82d7d386b54c",
+      "test_predictions.parquet": "ef842756216ba10e354d116a87410f0325d54a6c00f6ecff47d311fe95219a75"
+    },
+    "git_at_run": {
+      "commit": "469d393f916c264cc86a9ba962734137cf1d771d",
+      "dirty": true
+    },
+    "note": "The run was executed from an uncommitted tree on top of 469d393 (dirty=true). The package fingerprint of commit b55bfe4 recomputed from git equals the run's fingerprint, so the run's code is byte-identical to b55bfe4.",
+    "package_code_fingerprint": "76de5603b1e120a239a7763ec90820d10b12e69359039f8e230401043f204864",
+    "run_id": "d10ff67cd3b7"
+  },
+  "population": {
+    "folds": "walk_forward_folds(splits): fit dev_start..y-2, calibration y-1, test y",
+    "rows": "eval_eligible (Gate-0 eligibility.v1)"
+  },
+  "source_commit": "b55bfe4bffa03fde7213e27560a39d079b9155ad",
+  "status": "FROZEN",
+  "training": {
+    "calibration": "slope-only logistic recalibration on year y-1",
+    "early_stopping_rounds": 50,
+    "fixed": {
+      "bagging_fraction": 0.8,
+      "bagging_freq": 1,
+      "feature_fraction": 0.8,
+      "lambda_l2": 1.0
+    },
+    "grid": [
+      {
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 200,
+        "num_leaves": 15
+      },
+      {
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 200,
+        "num_leaves": 31
+      },
+      {
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500,
+        "num_leaves": 15
+      },
+      {
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500,
+        "num_leaves": 31
+      }
+    ],
+    "lightgbm_params": "objective binary, deterministic, force_col_wise, num_threads 4, all seeds = config seed",
+    "max_rounds": 2000,
+    "seed": 20261103,
+    "selection": "lowest symmetrized validation log-loss on the fit window's last year (train on years <= y-3); ties -> lowest grid index; refit on the full fit window with the selected rounds",
+    "symmetrize": "p = (f(x) + 1 - f(swap(x))) / 2"
+  }
+}

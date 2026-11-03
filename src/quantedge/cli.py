@@ -21,6 +21,14 @@ from quantedge.core.splits import load_split_config
 from quantedge.curation.audit import run_audit
 from quantedge.experiments.phase2 import load_phase2_config, run_phase2
 from quantedge.experiments.phase5 import load_phase5_config, run_phase5
+from quantedge.experiments.phase5_freeze import build_freeze_record, write_freeze_record
+from quantedge.experiments.phase5_late_check import (
+    LateCheckRefusedError,
+    dry_run,
+    execute,
+    make_loader,
+    verify_prepared,
+)
 from quantedge.experiments.phase5_review import run_phase5_review
 from quantedge.experiments.registry import LateCheckLimitError, read_registry
 from quantedge.odds import commands as odds_commands
@@ -208,6 +216,75 @@ def experiment_phase5_review_cmd(
     )
     typer.echo(json.dumps({"run_id": run_id, "headline_log_loss": metrics["headline"]}))
     typer.echo(f"run: {run_dir}")
+
+
+@experiment_app.command("phase5-freeze")
+def experiment_phase5_freeze_cmd(
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+    runs_root: RunsRoot = Path("runs"),
+) -> None:
+    """Write the write-once freeze record of phase5-gbm-v1 (development data only; no training)."""
+    record = build_freeze_record(
+        load_tables(resolve_build_dir(data_root / "processed")),
+        load_split_config(config_dir / "splits.yaml"),
+        repo_root=Path(),
+        runs_root=runs_root,
+    )
+    path = write_freeze_record(record, Path())
+    typer.echo(
+        json.dumps({"freeze_record": str(path), "mapping": record["features"]["category_mapping"]})
+    )
+
+
+@experiment_app.command("phase5-late-check")
+def experiment_phase5_late_check_cmd(
+    execute_look: Annotated[
+        bool, typer.Option("--execute", help="Take the look (default: dry run, no data read).")
+    ] = False,
+    approve: Annotated[
+        bool, typer.Option("--approve-late-check-look", help="Explicit owner approval.")
+    ] = False,
+    confirm_model_version: Annotated[
+        str, typer.Option(help="Must be exactly phase5-gbm-v1 to execute.")
+    ] = "",
+    note: Annotated[str, typer.Option(help="Approval reference recorded with the look.")] = "",
+    backup: Annotated[Path, typer.Option(help="Durable audit backup (outside runs/).")] = Path(
+        "data/audit/late_check_audit.jsonl"
+    ),
+    config_dir: ConfigDir = Path("configs"),
+    data_root: DataRoot = Path("data"),
+    runs_root: RunsRoot = Path("runs"),
+) -> None:
+    """Frozen phase5-gbm-v1 late check on 2023-2024 (dry run unless explicitly approved)."""
+    splits = load_split_config(config_dir / "splits.yaml")
+    try:
+        if not execute_look:
+            plan = dry_run(Path(), splits, runs_root=runs_root, backup_path=backup)
+            typer.echo(json.dumps(plan, indent=2))
+            return
+        rule, _ = verify_prepared(Path())
+        loader = make_loader(
+            resolve_build_dir(data_root / "processed"),
+            splits,
+            repo_root=Path(),
+            runs_root=runs_root,
+            rule=rule,
+        )
+        result = execute(
+            repo_root=Path(),
+            splits=splits,
+            runs_root=runs_root,
+            backup_path=backup,
+            approve=approve,
+            confirm_model_version=confirm_model_version,
+            note=note,
+            loader=loader,
+        )
+    except (LateCheckRefusedError, LateCheckLimitError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result["primary"], indent=2, default=str))
 
 
 @experiment_app.command("list")
