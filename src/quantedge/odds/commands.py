@@ -57,11 +57,20 @@ from quantedge.odds.v2_draft import (
     identity_links,
     load_calendar,
     read_tranche_plan,
-    run_tranche,
     schedule_listings,
     v2_audit,
     write_lock,
     write_tranche_plan,
+)
+from quantedge.odds.v2_guard import (
+    V2GuardError,
+    guarded_stage_run,
+    guarded_tranche_run,
+    is_v2_manifest,
+    v2_window_conflict,
+)
+from quantedge.odds.v2_guard import (
+    preflight as v2_preflight,
 )
 
 odds_app = typer.Typer(no_args_is_help=True, help="Odds infrastructure (Phase 3A).")
@@ -166,9 +175,17 @@ def capture_historical_cmd(
     config_dir: ConfigDir = Path("configs"),
     data_root: DataRoot = Path("data"),
 ) -> None:
-    """One historical snapshot (10 x markets x regions credits) into the historical store."""
-    client = TheOddsApiClient(_api_config(config_dir, max_credits))
+    """One historical snapshot (10 x markets x regions credits) into the historical store.
+
+    Refused inside any frozen V2 edition window: those snapshots may only be bought through the
+    guarded V2 manifests, otherwise they would enter V2 as-of snapshots outside the budget.
+    """
     when = datetime.fromisoformat(at.replace("Z", "+00:00")).astimezone(UTC)
+    edition = v2_window_conflict(sport, when.date())
+    if edition is not None:
+        typer.echo(f"refusing: {at} lies in the frozen V2 window of {edition}", err=True)
+        raise typer.Exit(code=2)
+    client = TheOddsApiClient(_api_config(config_dir, max_credits))
     try:
         capture = client.historical_odds(sport, when, approved=approve_paid_call)
     except OddsApiError as exc:
@@ -450,31 +467,46 @@ def stage_run_cmd(
     config_dir: ConfigDir = Path("configs"),
     data_root: DataRoot = Path("data"),
 ) -> None:
-    """Walk a stage manifest with a cumulative credit ledger; dry run unless both flags are set."""
+    """Walk a stage manifest with a cumulative credit ledger; dry run unless both flags are set.
+
+    V2 day-anchor manifests run only behind the programme-wide guard (``odds.v2_guard``); paid
+    execution of any other manifest is refused (v1 acquisition is suspended, D-34).
+    """
     out = _stage_dir(data_root, name)
     manifest = StageManifest.from_json((out / "manifest.json").read_text(encoding="utf-8"))
-    client = None
-    if execute:
-        if not approve_paid_calls:
-            typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
-            raise typer.Exit(code=2)
-        config = _api_config(config_dir, manifest.planned_credits).model_copy(
-            update={"max_retries": 0}
-        )
-        client = TheOddsApiClient(config)
+    store = _store(data_root, "historical")
+    repo_root = config_dir.resolve().parent
+    v2 = is_v2_manifest(manifest)
+    if execute and not approve_paid_calls:
+        typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
+        raise typer.Exit(code=2)
+    if execute and not v2:
+        typer.echo("refusing: paid v1 stage acquisition is suspended (D-34)", err=True)
+        raise typer.Exit(code=2)
+    programme = None
     try:
-        report = run_stage(
-            manifest,
-            store=_store(data_root, "historical"),
-            ledger_path=out / "ledger.jsonl",
-            client=client,
-            execute=execute,
-        )
+        if v2:
+            programme = v2_preflight(out, repo_root=repo_root, store=store)
+        client = None
+        if execute:
+            config = _api_config(config_dir, manifest.planned_credits).model_copy(
+                update={"max_retries": 0}
+            )
+            client = TheOddsApiClient(config)
+        if v2:
+            _, report = guarded_stage_run(
+                out, repo_root=repo_root, store=store, client=client, execute=execute
+            )
+        else:
+            report = run_stage(manifest, store=store, ledger_path=out / "ledger.jsonl")
+    except V2GuardError as exc:
+        typer.echo(f"REFUSED (V2 guard): {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (StageRunStoppedError, OddsApiError) as exc:
         typer.echo(f"STOPPED: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     rows = [{k: v for k, v in r.items() if k != "capture_id"} for r in report]
-    typer.echo(json.dumps({"execute": execute, "rows": rows}, indent=2))
+    typer.echo(json.dumps({"execute": execute, "programme": programme, "rows": rows}, indent=2))
 
 
 @odds_app.command("stage-audit")
@@ -635,27 +667,38 @@ def v2_tranche_run_cmd(
 ) -> None:
     """DRAFT v2: run one tranche; later tranches need a passing offline gate of the previous one."""
     stage = _stage_dir(data_root, name)
-    client = None
-    if execute:
-        if not approve_paid_calls:
-            typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
-            raise typer.Exit(code=2)
+    store = _store(data_root, "historical")
+    repo_root = config_dir.resolve().parent
+    if execute and not approve_paid_calls:
+        typer.echo("refusing: --execute needs --approve-paid-calls", err=True)
+        raise typer.Exit(code=2)
+    try:
         plan = {t.number: t for t in read_tranche_plan(stage)}
         if tranche not in plan:
-            typer.echo(f"no tranche {tranche}", err=True)
-            raise typer.Exit(code=1)
-        config = _api_config(config_dir, plan[tranche].max_credits).model_copy(
-            update={"max_retries": 0}
+            raise V2IntegrationError(f"no tranche {tranche}")
+        programme = v2_preflight(
+            stage,
+            repo_root=repo_root,
+            store=store,
+            request_ids=frozenset(plan[tranche].request_ids),
         )
-        client = TheOddsApiClient(config)
-    try:
-        report = run_tranche(
-            stage, tranche, store=_store(data_root, "historical"), client=client, execute=execute
+        client = None
+        if execute:
+            config = _api_config(config_dir, plan[tranche].max_credits).model_copy(
+                update={"max_retries": 0}
+            )
+            client = TheOddsApiClient(config)
+        _, report = guarded_tranche_run(
+            stage, tranche, repo_root=repo_root, store=store, client=client, execute=execute
         )
+    except V2GuardError as exc:
+        typer.echo(f"REFUSED (V2 guard): {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     except (StageRunStoppedError, OddsApiError, V2IntegrationError) as exc:
         typer.echo(f"STOPPED: {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(json.dumps({"execute": execute, "tranche": tranche, "rows": report}, indent=2))
+    out = {"execute": execute, "tranche": tranche, "programme": programme, "rows": report}
+    typer.echo(json.dumps(out, indent=2))
 
 
 @odds_app.command("v2-tranche-check")
