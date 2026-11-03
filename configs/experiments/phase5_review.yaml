@@ -1,0 +1,35 @@
+# EXPLORATORY Phase 5 review (written before these comparisons were computed).
+# The inner development folds 2013-2022 have already been inspected (Phase 2 and phase5-gbm-v1),
+# so nothing here is confirmatory. phase5-gbm-v1 is not changed, replaced or retuned.
+# Readers are cut at splits.inner_end; no late-check or holdout data is read.
+name: phase5_review
+model_version: phase5-review-exploratory
+seed: 20261103
+bootstrap_replicates: 2000
+v1_config: configs/experiments/phase5_gbm.yaml   # features/training settings reused verbatim
+v1_run_id: d10ff67cd3b7
+phase2_run_id: 0a5b056019ec
+
+candidates:
+  elo_ref:           # Phase 2 reference Elo (fivethirtyeight k_c 250), slope-recalibrated on y-1
+    kind: elo
+  elo_format:        # phase5-elo-format-diag-v1: elo_ref with best-of-5 set-probability transform
+    kind: elo_format
+  gbm_lite:          # phase5-gbm-lite-exp1: v1 settings without the new statistics
+    kind: gbm_masked
+    drop: [serve_diff, return_diff, surface_serve_diff, surface_return_diff, bp_saved_diff,
+           log_stats_points_diff, form_diff, matches_14_diff, matches_30_diff,
+           minutes_14_diff, minutes_30_diff]
+  gbm_no_rounds:     # diagnostic: v1 without rounds_into_draw (feature-audit sensitivity)
+    kind: gbm_masked
+    drop: [rounds_into_draw]
+
+contrasts:   # (a - b); negative favours a
+  - [gbm_lite, gbm_v1]
+  - [gbm_lite, elo_frozen]
+  - [elo_format, elo_frozen]
+  - [elo_format, elo_ref]
+  - [gbm_v1, elo_format]
+  - [gbm_lite, elo_format]
+  - [gbm_no_rounds, gbm_v1]
+subsets: [all, grand_slam_main, excluding_challenger_qualifying]
