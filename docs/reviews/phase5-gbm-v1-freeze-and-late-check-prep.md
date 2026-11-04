@@ -141,6 +141,18 @@ New synthetic tests: `tests/unit/test_phase5_late_check.py`, **27 passed**. They
 8. **Grid selection uses year y − 2** (2021 and 2022), which were inner test years already inspected. This is the frozen
    v1 procedure, and nothing was chosen from late-check data.
 
+## 5a. Addendum 2026-11-04: lazy loader (risk 4 resolved)
+
+- The late-check loader no longer calls `load_tables`. `core/lazy_tables.load_development_tables` scans Parquet lazily and
+  applies the date filter (`matches`, `tournaments`, `rankings` ≤ `development_end`) and, for `match_entry` and
+  `match_stats`, a semi-join on permitted match keys **before collection**. 2025+ rows are never materialized; a
+  post-collection check and a refusal of any end ≥ `holdout_start` fail closed.
+- Frozen files (including `core/dataview.py`), the rule, the freeze record and all fingerprints are unchanged. Synthetic
+  tests prove the result is identical to `DataView.table`, that no holdout rows reach `build_frame`, and that no eager
+  full-table read happens.
+- Official dry run (no `--execute`, no approval flags): fingerprints verified, Elo baseline present with the registered
+  size, folds 2023 and 2024 as planned, **0 looks**, no data loaded, 0 network attempts.
+
 ## 6. Verdict
 
 **READY** for one separately authorized `phase5-gbm-v1` late check.

@@ -29,8 +29,7 @@ from typing import Any
 import polars as pl
 import yaml
 
-from quantedge.canonical.build import load_tables
-from quantedge.core.dataview import DataView
+from quantedge.core.lazy_tables import load_development_tables
 from quantedge.core.splits import Fold, SplitConfig, walk_forward_folds
 from quantedge.evaluation.bootstrap import block_bootstrap_means
 from quantedge.evaluation.metrics import brier_terms, log_loss_terms, summary
@@ -265,7 +264,11 @@ def dry_run(
     baseline = runs_root / rule["baseline"]["phase2_late_check_run_id"] / rule["baseline"]["file"]
     size = baseline.stat().st_size if baseline.exists() else None  # metadata only, not contents
     return {
-        "would_read": {"view": "development", "end": str(splits.development_end)},
+        "would_read": {
+            "view": "development",
+            "end": str(splits.development_end),
+            "loader": "lazy date-filtered parquet scan (no rows after end materialized)",
+        },
         "folds": [
             {
                 "test": f.test_start.year,
@@ -336,8 +339,9 @@ def make_loader(
     """The only 2023-2024 reader; ``execute`` calls it strictly after the look is recorded."""
 
     def load() -> LateCheckInputs:
-        view = DataView(load_tables(build_dir), splits, mode="development")
-        tables = {name: view.table(name, end=splits.development_end) for name in INNER_TABLES}
+        tables = load_development_tables(
+            build_dir, splits, INNER_TABLES, end=splits.development_end
+        )
         latest = tables["matches"]["tournament_start_date"].max()
         if latest is not None and latest > splits.development_end:  # type: ignore[operator]
             raise RuntimeError("late-check reader returned rows after development_end")

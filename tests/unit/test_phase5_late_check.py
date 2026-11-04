@@ -203,7 +203,7 @@ def test_data_derived_codes_are_replaced_by_the_pinned_mapping(repo: Path) -> No
 def test_dry_run_loads_no_data_and_records_no_look(
     repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(lc, "load_tables", _never)
+    monkeypatch.setattr(lc, "load_development_tables", _never)
     monkeypatch.setattr(pl, "read_parquet", _never)
     monkeypatch.setattr(lc, "record_late_check_look", _never)
     plan = lc.dry_run(repo, SPLITS, runs_root=tmp_path / "runs", backup_path=tmp_path / "b.jsonl")
